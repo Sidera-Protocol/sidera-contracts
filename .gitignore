@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+.env
+node_modules/
+dist/
+*.wasm
+!docs/**/*.wasm
+.DS_Store

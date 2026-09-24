@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["contracts/registry"]
+exclude = ["packages"]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.84"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/Sidera-Protocol/sidera"
+
+[workspace.dependencies]
+soroban-sdk = "=27.0.6"
+
+[workspace.lints.rust]
+# `deny` (not `forbid`): soroban-sdk's testutils macros emit inner
+# `allow(unsafe_code)` attributes for host-function FFI, which forbid
+# would reject. Production handlers must not use unsafe either way.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all      = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -2 }
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = "symbols"

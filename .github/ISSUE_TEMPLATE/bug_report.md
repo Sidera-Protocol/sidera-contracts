@@ -1,0 +1,14 @@
+---
+name: bug_report
+about: Report a problem with the Sidera registry or SDK
+title: "fix(scope): short summary"
+labels: ["bug"]
+---
+
+## What happened
+
+## Expected behavior
+
+## Steps to reproduce
+
+## Environment (network, contract version, wallet)
