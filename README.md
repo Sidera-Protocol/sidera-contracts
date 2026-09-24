@@ -28,6 +28,25 @@ Day-1 MVP: `register` / `resolve` / `set_address` / `transfer` /
 `owner_of` with TTL-extend-on-write so long-held names never archive.
 Next tranches: pricing & renewals, reverse resolution, subnames, TS SDK.
 
+## Proof at a glance
+
+| Item | Value |
+|---|---|
+| Network | Stellar **Testnet** |
+| Deployed | 2026-09-24 |
+| Contract ID | `CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ` |
+| WASM sha256 | see `provenance` after CI run — artifact `sidera_registry.wasm` (11,061 bytes) |
+| Live round-trip | `register("sidera")` → `total_names()=1` → `owner_of` → `resolve` all confirmed via stellar-cli 28.0.0 |
+| Deployer | `grantfox-arbiter` testnet identity |
+
+Explorer: <https://stellar.expert/explorer/testnet/contract/CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ>
+
+## Contributing
+
+Contributions welcome via **Drips Wave** and **GrantFox** — see the issue
+ladder on this repo and `CONTRIBUTING.md`. Fork-first workflow; every
+issue carries acceptance criteria and verification commands.
+
 ## Development
 
 ```bash

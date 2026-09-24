@@ -1,6 +1,6 @@
 ---
 name: bug_report
-about: Report a problem with the Sidera registry or SDK
+about: Report a problem with the Sidera registry contract
 title: "fix(scope): short summary"
 labels: ["bug"]
 ---
@@ -11,4 +11,4 @@ labels: ["bug"]
 
 ## Steps to reproduce
 
-## Environment (network, contract version, wallet)
+## Environment (network, contract ID, tooling version)
