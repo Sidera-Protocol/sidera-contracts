@@ -16,6 +16,10 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+# Property-based tests: randomized invariants for the fund-loss bug
+# classes (bad names, altered memos, ownership races). Cases are
+# deterministic by default; override with PROPTEST_CASES=n.
+proptest = "1"
 
 [lints]
 workspace = true
