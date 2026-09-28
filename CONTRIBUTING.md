@@ -12,7 +12,7 @@ the maintainers.
 
 1. **Pick a labeled issue** — issues tagged `external-contributors` are open
    to everyone. Comment with your proposed approach and **wait for
-   assignment** before starting (required on Drips Wave & GrantFox).
+   assignment** before starting.
 2. **Fork & branch** — fork the repo, then:
    ```bash
    git clone https://github.com/<your-user>/sidera-contracts.git
