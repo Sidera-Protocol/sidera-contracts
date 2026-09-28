@@ -1,0 +1,26 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Mondays 00:00 UTC — known-advisory drift in Cargo.lock is caught
+    # even when nothing in the repo changes.
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    # audit-check publishes its result as a check run on the commit.
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allow-low: true
+          deny-warnings: false
+          # Warnings (e.g. transitive unmaintained crates) do not fail the
+          # job while `deny-warnings` is false; actual vulnerabilities do.

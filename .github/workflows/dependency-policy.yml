@@ -1,0 +1,23 @@
+name: Dependency Policy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dependency-policy:
+    name: Dependency Policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Pinned install so the policy engine itself is reproducible.
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+      - name: Check dependency sources
+        run: cargo deny check sources
+      - name: Check dependency bans
+        run: cargo deny check bans

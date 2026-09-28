@@ -1,0 +1,40 @@
+# cargo-deny policy — dependency supply-chain guard.
+#
+# This policy intentionally checks only `sources` and `bans`:
+# - `sources`: reject dependency sources other than crates.io (no git
+#   dependencies, no unknown registries) — every dependency must come from
+#   the audited crates.io pipeline.
+# - `bans`: reject multiple versions of the same crate where feasible and
+#   keep the dependency tree explainable.
+#
+# `advisories` is deliberately NOT enabled here: known-vulnerability
+# detection is the audit job's responsibility (.github/workflows/audit.yml,
+# rustsec/audit-check). Running both would duplicate the same advisory
+# database fetch and split the failure signal across two jobs.
+
+[graph]
+# The workspace's only dependency target set; wasm32v1-none builds resolve
+# the same crates (soroban-sdk is target-agnostic).
+all-features = false
+no-default-features = false
+
+[sources]
+unknown-registry = "warn"
+unknown-git      = "deny"
+allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
+allow-git        = []
+
+[bans]
+# Duplicate crate versions are surfaced as warnings, not hard failures:
+# the proptest dev-dependency graph shares crates with soroban-env-host
+# at different versions (~53 duplicates today), and dev-dependencies are
+# never compiled into the release WASM artifact, so they cannot affect
+# what ships. Revisit as periodic cleanup; promote to "deny" if a
+# duplicate ever appears in the non-dev graph.
+multiple-versions = "warn"
+wildcards         = "deny"
+highlight         = "all"
+
+# No skips yet. When adding a skip, always include the `reason` field.
+skip = []
+skip-tree = []
