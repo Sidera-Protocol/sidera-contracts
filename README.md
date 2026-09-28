@@ -25,6 +25,7 @@ Next tranches: pricing & renewals, reverse resolution, subnames, TS SDK.
 | Document | Contents |
 |---|---|
 | [Resolver interface](docs/resolver-interface.md) | The contract every Sidera-compatible wallet and payment app codes against: `Resolution` shape, wallet memo rules, planned reverse resolution |
+| [Known limitations](docs/KNOWN-LIMITATIONS.md) | Exactly what Sidera does and does not do yet |
 | [Security policy](SECURITY.md) | Deployment status, vulnerability reporting, and scope notes |
 | [Contributing guide](CONTRIBUTING.md) | Fork-first workflow, code standards, commit and PR conventions |
 | [Issue templates](.github/ISSUE_TEMPLATE) | Bug reports and feature requests, each with acceptance criteria |
@@ -62,7 +63,15 @@ cargo build --workspace --all-targets --locked
 cargo test  --workspace --all-targets --locked
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# Regenerate the WASM provenance manifest (sha256 + git revision,
+# verified by a clean rebuild):
+scripts/provenance.sh build
 ```
+
+CI enforces: **Rustfmt · lockfile check · Clippy (`-D warnings`) · Test ·
+Docs · WASM size budget · Security Audit · Dependency Policy ·
+Provenance** — all with `--locked` for reproducible builds.
 
 ## Contributing
 

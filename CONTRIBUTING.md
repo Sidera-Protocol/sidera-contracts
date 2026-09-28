@@ -29,7 +29,8 @@ the maintainers.
    cargo build --locked --release --target wasm32v1-none -p sidera-registry
    ```
 5. **Open a PR** against `Sidera-Protocol/sidera-contracts:main` with
-   `Closes #<issue-number>` in the description.
+   `Closes #<issue-number>` in the description (the PR template prompts
+   for it).
 
 ## Code standards
 
@@ -58,9 +59,10 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## PR review
 
-All CI checks (fmt, clippy `-D warnings`, tests, WASM build) must pass.
-Branch protection requires one approving review. A human maintainer reviews
-and merges — CI passing does not equal approval.
+All CI checks (fmt, lockfile, clippy `-D warnings`, tests, docs, WASM size
+budget, security audit, dependency policy, provenance) must pass. Branch
+protection requires one approving review. A human maintainer reviews and
+merges — CI passing does not equal approval.
 
 ## Security
 
