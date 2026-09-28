@@ -16,6 +16,9 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+      # A Cargo.lock that doesn't match the manifests means someone edited
+      # dependencies without running a full local build — catch it here.
+      - run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
 
   clippy:
     name: Clippy
@@ -40,6 +43,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --all-targets --locked
 
+  doc:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # rustdoc fails on broken intra-doc links with -D warnings; the
+      # contract's doc comments use them heavily and are part of the
+      # client-facing surface.
+      - run: cargo doc --workspace --no-deps --locked --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
+
   wasm-build:
     name: WASM Build
     runs-on: ubuntu-latest
@@ -52,6 +69,29 @@ jobs:
       - run: cargo build --locked --release --target wasm32v1-none -p sidera-registry
       - name: Report artifact size
         run: |
+          shopt -s nullglob
           for wasm in target/wasm32v1-none/release/*.wasm; do
             echo "$(basename "$wasm"): $(stat -c%s "$wasm") bytes"
           done
+      # Budget enforcement (registry WASM was 11,061 bytes at MVP): the
+      # limit is generous headroom for the pricing/renewals and reverse
+      # resolution tranches, but a runaway dependency or accidental
+      # feature-flag slip fails CI instead of shipping silently. Raise the
+      # budget deliberately, in a reviewed PR.
+      - name: Enforce maximum WASM size
+        run: |
+          MAX_SIZE=32768
+          shopt -s nullglob
+          found=0
+          for wasm in target/wasm32v1-none/release/*.wasm; do
+            found=1
+            size=$(stat -c%s "$wasm")
+            if [ "$size" -gt "$MAX_SIZE" ]; then
+              echo "::error::$wasm exceeds $MAX_SIZE bytes: $size bytes"
+              exit 1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No WASM artifacts were produced; the size check cannot run"
+            exit 1
+          fi

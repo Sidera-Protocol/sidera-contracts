@@ -1,0 +1,36 @@
+name: Provenance Manifest
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  provenance:
+    name: Provenance Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The manifest records the exact git revision the artifacts were
+          # built from, so the checkout must not be shallow.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+      - name: Build artifact and generate manifest
+        run: scripts/provenance.sh build
+      - name: Verify artifact reproduces from a clean build
+        run: |
+          # A drift-free rebuild from the same tree is the whole point of
+          # the manifest: verify from scratch, not against warm caches.
+          cargo clean
+          scripts/provenance.sh verify
+      - name: Upload provenance manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance-manifest
+          path: provenance-manifest.json
+          if-no-files-found: error
