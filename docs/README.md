@@ -29,11 +29,14 @@ repository and its security policy.
 
 ## Documentation by audience
 
-- Contract developers: [resolver interface](resolver-interface.md) and
-  [known limitations](KNOWN-LIMITATIONS.md).
+- Contract developers: [architecture](ARCHITECTURE.md),
+  [development and release checks](DEVELOPMENT.md), [resolver interface](resolver-interface.md),
+  and [known limitations](KNOWN-LIMITATIONS.md).
 - SDK integrators: the [SDK README](https://github.com/Sidera-Protocol/sidera-sdk#readme)
+  and [API reference](https://github.com/Sidera-Protocol/sidera-sdk/blob/main/docs/API.md)
   for installation, reads, writes, signing, and name validation.
 - Application developers: the [dashboard README](https://github.com/Sidera-Protocol/sidera-app#readme)
+  and [troubleshooting guide](https://github.com/Sidera-Protocol/sidera-app/blob/main/docs/TROUBLESHOOTING.md)
   for local setup, environment variables, and the testnet demo.
 - Contributors: start with the relevant repository's `CONTRIBUTING.md`, then
   choose an issue with acceptance criteria and verification steps.
