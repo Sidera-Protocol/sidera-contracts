@@ -24,6 +24,7 @@ Next tranches: pricing & renewals, reverse resolution, subnames, TS SDK.
 
 | Document | Contents |
 |---|---|
+| [Project documentation hub](docs/README.md) | Repository map, deployment status, integration flow, and contributor starting points |
 | [Resolver interface](docs/resolver-interface.md) | The contract every Sidera-compatible wallet and payment app codes against: `Resolution` shape, wallet memo rules, planned reverse resolution |
 | [Known limitations](docs/KNOWN-LIMITATIONS.md) | Exactly what Sidera does and does not do yet |
 | [Security policy](SECURITY.md) | Deployment status, vulnerability reporting, and scope notes |
