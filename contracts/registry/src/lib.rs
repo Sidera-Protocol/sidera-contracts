@@ -11,6 +11,11 @@
 //! - `register` requires the registering owner.
 //! - `set_address` and `transfer` require the current owner.
 //! - `resolve`, `exists`, `owner_of`, and `total_names` are read-only.
+//!
+//! Events (topics: event symbol + name; data in parentheses):
+//! - `registered(name)` — `(owner, address, memo)` — a name was registered.
+//! - `address_set(name)` — `(caller, address, memo)` — the payment record changed.
+//! - `transferred(name)` — `(caller, new_owner)` — ownership moved.
 #![no_std]
 // Soroban `#[contractimpl]` entrypoints take parameters **by value**: the SDK
 // macro derives the contract ABI from the exported signature, so `&Env` or
@@ -21,7 +26,9 @@
 #[cfg(test)]
 extern crate std;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, String,
+};
 
 /// Errors for the Sidera registry.
 #[contracterror]
@@ -51,6 +58,52 @@ pub struct Resolution {
     pub address: Address,
     /// Optional memo the destination requires (numeric ID or text).
     pub memo: Option<String>,
+}
+
+/// Emitted when a name is registered. Topics: `("registered", name)`;
+/// data (in order): `owner`, `address`, `memo`.
+#[contractevent(topics = ["registered"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Registered {
+    /// The registered name.
+    #[topic]
+    pub name: String,
+    /// The owning address.
+    pub owner: Address,
+    /// The initial payment destination.
+    pub address: Address,
+    /// The initial memo hint.
+    pub memo: Option<String>,
+}
+
+/// Emitted when a name's payment record changes. Topics:
+/// `("address_set", name)`; data (in order): `caller`, `address`, `memo`.
+#[contractevent(topics = ["address_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressSet {
+    /// The name whose record changed.
+    #[topic]
+    pub name: String,
+    /// The owner that performed the update.
+    pub caller: Address,
+    /// The new payment destination.
+    pub address: Address,
+    /// The new memo hint.
+    pub memo: Option<String>,
+}
+
+/// Emitted when a name's ownership moves. Topics:
+/// `("transferred", name)`; data (in order): `caller`, `new_owner`.
+#[contractevent(topics = ["transferred"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnershipTransferred {
+    /// The name whose ownership moved.
+    #[topic]
+    pub name: String,
+    /// The previous owner that performed the transfer.
+    pub caller: Address,
+    /// The new owner.
+    pub new_owner: Address,
 }
 
 /// Storage keys.
@@ -133,6 +186,14 @@ impl SideraRegistry {
             .ok_or(RegistryError::ArithmeticOverflow)?;
         env.storage().instance().set(&DataKey::Count, &next);
 
+        Registered {
+            name: name.clone(),
+            owner,
+            address: record.address.clone(),
+            memo: record.memo.clone(),
+        }
+        .publish(&env);
+
         Ok(name)
     }
 
@@ -178,8 +239,16 @@ impl SideraRegistry {
         caller.require_auth();
         Self::require_owner(&env, &name, &caller)?;
 
-        let key = DataKey::Name(name);
         let record = Resolution { address, memo };
+        AddressSet {
+            name: name.clone(),
+            caller,
+            address: record.address.clone(),
+            memo: record.memo.clone(),
+        }
+        .publish(&env);
+
+        let key = DataKey::Name(name);
         env.storage().persistent().set(&key, &record);
         env.storage()
             .persistent()
@@ -205,6 +274,13 @@ impl SideraRegistry {
     ) -> Result<(), RegistryError> {
         caller.require_auth();
         Self::require_owner(&env, &name, &caller)?;
+
+        OwnershipTransferred {
+            name: name.clone(),
+            caller,
+            new_owner: new_owner.clone(),
+        }
+        .publish(&env);
 
         let owner_key = DataKey::Owner(name);
         env.storage().persistent().set(&owner_key, &new_owner);
