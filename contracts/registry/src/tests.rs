@@ -1,6 +1,6 @@
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
-use soroban_sdk::IntoVal;
+use soroban_sdk::testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke};
+use soroban_sdk::{IntoVal, Symbol};
 
 const TTL_EXTEND_TO_LEDGERS: u32 = 518_400;
 
@@ -297,5 +297,92 @@ fn storage_keys_are_distinct() {
     assert_ne!(
         std::format!("{:?}", DataKey::Name(name.clone())),
         std::format!("{:?}", DataKey::Owner(name))
+    );
+}
+
+#[test]
+fn register_emits_registered_event() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+    let dest = Address::generate(&env);
+    let memo = Some(s(&env, "404"));
+
+    client.register(&s(&env, "iris"), &owner, &dest, &memo);
+
+    assert_eq!(
+        env.events().all(),
+        soroban_sdk::vec![
+            &env,
+            (
+                id.clone(),
+                soroban_sdk::vec![
+                    &env,
+                    Symbol::new(&env, "registered").into_val(&env),
+                    s(&env, "iris").into_val(&env),
+                ],
+                (owner, dest, memo).into_val(&env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn set_address_emits_address_set_event() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+    let dest = Address::generate(&env);
+    let new_dest = Address::generate(&env);
+    let memo = Some(s(&env, "777"));
+
+    client.register(&s(&env, "jade"), &owner, &dest, &None);
+    client.set_address(&s(&env, "jade"), &owner, &new_dest, &memo);
+
+    assert_eq!(
+        env.events().all(),
+        soroban_sdk::vec![
+            &env,
+            (
+                id.clone(),
+                soroban_sdk::vec![
+                    &env,
+                    Symbol::new(&env, "address_set").into_val(&env),
+                    s(&env, "jade").into_val(&env),
+                ],
+                (owner, new_dest, memo).into_val(&env),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn transfer_emits_transferred_event() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+    let new_owner = Address::generate(&env);
+    let dest = Address::generate(&env);
+
+    client.register(&s(&env, "kara"), &owner, &dest, &None);
+    client.transfer(&s(&env, "kara"), &owner, &new_owner);
+
+    assert_eq!(
+        env.events().all(),
+        soroban_sdk::vec![
+            &env,
+            (
+                id.clone(),
+                soroban_sdk::vec![
+                    &env,
+                    Symbol::new(&env, "transferred").into_val(&env),
+                    s(&env, "kara").into_val(&env),
+                ],
+                (owner, new_owner).into_val(&env),
+            ),
+        ]
     );
 }
