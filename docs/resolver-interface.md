@@ -1,4 +1,4 @@
-# Sidera Resolver Interface (draft 0)
+# Sidera Resolver Interface
 
 The contract every Sidera-compatible wallet and payment app codes against.
 
@@ -23,14 +23,26 @@ Wallet rules:
    to exist.
 3. Display the resolved G-address alongside the name for verification.
 
-## Reverse resolution (planned tranche)
+## Reverse resolution
 
 ```rust
 fn primary_name(env: Env, address: Address) -> Result<String, RegistryError>;
+
+fn set_primary_name(
+    env: Env,
+    address: Address,
+    name: String,
+) -> Result<(), RegistryError>;
 ```
 
-An address sets its preferred display name once (`set_primary_name`); UIs
-show `alice.sid` instead of `GA7X…`.
+- `set_primary_name` is owner-only: `address` must authorize the write.
+- `primary_name` returns the address owner's preferred `.sid` name, or
+  `RegistryError::NotFound` when no primary name is set.
+- The registry stores names **without** the `.sid` suffix; wallets should
+  append it for display.
+- Setting a primary name does **not** create or modify a forward
+  registration: an address can set a display name for an address it owns
+  even when no forward name is registered under that address.
 
 ## Semantics
 

@@ -81,6 +81,26 @@ topic, so indexers can subscribe once and filter by name or by event:
 A wallet that caches resolutions should re-resolve when it observes
 `address_set` or `transferred` for a name it holds.
 
+## Cache invalidation for cached resolution results
+
+If your wallet caches `resolve` results, invalidate or refresh the cache
+whenever it observes any of these registry events for a name or address it
+cares about:
+
+- `address_set(name)` — the payment destination or memo hint for a name has
+  changed.
+- `transferred(name)` — ownership of a name changed; the applicable wallet
+  should re-resolve because the new owner may publish a different memo hint.
+- `registered(name)` — a new name exists; the wallet should treat the first
+  cached lookup as a cache miss and resolve against the contract.
+
+If you also cache reverse-resolution results produced by `primary_name`,
+invalidate them when the address owner calls `set_primary_name` or when the
+address record changes in a way your wallet tracks. For now, the SDK
+snippet below only exercises `resolve`; it does not call `primary_name`, so
+there is no SDK-side parity requirement in this repo unless the snippet is
+updated to cover both entrypoints.
+
 ## What Sidera does not do yet
 
 Reverse resolution, subnames, and pricing/renewals are future tranches —
