@@ -135,6 +135,7 @@ const NAME_MIN_LEN: u32 = 3;
 const NAME_MAX_LEN: u32 = 32;
 
 /// The primary-name record for an address.
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimaryNameRecord {
     pub name: String,
@@ -229,16 +230,12 @@ impl SideraRegistry {
     ///
     /// * [`RegistryError::InvalidName`] — `name` failed validation.
     /// * [`RegistryError::Unauthorized`] — `address` did not authorize the write.
-    pub fn set_primary_name(
-        env: Env,
-        address: Address,
-        name: String,
-    ) -> Result<(), RegistryError> {
+    pub fn set_primary_name(env: Env, address: Address, name: String) -> Result<(), RegistryError> {
         address.require_auth();
         Self::validate_name(&name)?;
 
         let key = DataKey::PrimaryName(address.clone());
-        let record = PrimaryNameRecord { name };
+        let record = PrimaryNameRecord { name: name.clone() };
         env.storage().persistent().set(&key, &record);
         env.storage()
             .persistent()
