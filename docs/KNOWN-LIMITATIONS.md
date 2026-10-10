@@ -18,8 +18,9 @@ not a hidden gap.
   horizon will eventually archive.
 - **No subnames.** Only second-level names under `.sid` can be registered;
   `pay.alice.sid` is not a thing yet.
-- **No reverse resolution.** `primary_name(address)` is specified in the
-  [resolver interface](resolver-interface.md) but not implemented.
+- **Reverse resolution is now supported.** `primary_name(address)` and
+  `set_primary_name(address, name)` are implemented and documented in the
+  [resolver interface](resolver-interface.md).
 - **Unilateral transfer.** `transfer` moves ownership without the
   recipient's acceptance, matching DNS/ENS convention. There is no
   escrowed or two-phase transfer.

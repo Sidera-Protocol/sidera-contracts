@@ -28,6 +28,13 @@ the maintainers.
    cargo test  --workspace --all-targets --locked
    cargo build --locked --release --target wasm32v1-none -p sidera-registry
    ```
+
+### Snapshot tests must not change without an intentional decision
+
+Some integration-style messages are asserted from serialized contract test
+snapshots under `contracts/registry/test_snapshots/tests/`. If a change
+must update a snapshot, do it explicitly and explain why in the PR, rather
+than silently re-baselining messages that other tooling may already rely on.
 5. **Open a PR** against `Sidera-Protocol/sidera-contracts:main` with
    `Closes #<issue-number>` in the description (the PR template prompts
    for it).

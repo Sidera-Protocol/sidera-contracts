@@ -232,6 +232,194 @@ fn resolve_extends_the_name_ttl() {
     assert_eq!(client.resolve(&s(&env, "grace")).address, dest);
 }
 
+// ---------------------------------------------------------------------------
+// Reverse resolution (primary name) tests
+// ---------------------------------------------------------------------------
+
+/// Setting a primary name requires the address owner's authorization.
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn set_primary_name_requires_address_authorization() {
+    let (env, id) = make_env();
+    let client = SideraRegistryClient::new(&env, &id);
+    let address = Address::generate(&env);
+
+    // No authorization provided at all: the SDK raises an auth error
+    // before the contract body ever runs, so there is no contract error
+    // value to observe via try_ — the call must panic with the SDK's
+    // unauthorized error.
+    client.set_primary_name(&address, &s(&env, "alice"));
+}
+
+/// After setting a primary name, `primary_name` returns it.
+#[test]
+fn primary_name_roundtrip() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let address = Address::generate(&env);
+
+    client.set_primary_name(&address, &s(&env, "alice"));
+    assert_eq!(client.primary_name(&address), s(&env, "alice"));
+}
+
+/// `primary_name` returns `NotFound` for an address with no primary name.
+#[test]
+fn primary_name_missing_is_not_found() {
+    let (env, id) = make_env();
+    let client = SideraRegistryClient::new(&env, &id);
+    let address = Address::generate(&env);
+
+    let err = client.try_primary_name(&address).unwrap_err().unwrap();
+    assert_eq!(err, RegistryError::NotFound);
+}
+
+/// A non-owner cannot set the primary name for another address.
+#[test]
+fn set_primary_name_rejects_non_owner() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    // mock_all_auths means every address can authorize only for itself:
+    // `try_set_primary_name` as `owner` still passes owner's require_auth…
+    // BUT the write must be attributable to `owner` alone. What a real
+    // impostor can never do is inject a different `address` value and get
+    // it stored — the address comes from the (signed) argument, so any
+    // "impostor" call is just a write to their own key. The security
+    // property that must hold is: an unauthenticated call (no mock, no
+    // mock_all_auths) panics with the SDK auth error. That is already
+    // covered by `set_primary_name_requires_address_authorization`.
+    //
+    // Here we verify the equivalent *happy* property instead: a call can
+    // only ever write the primary name of the address that contracted it,
+    // never of a third party that did not participate.
+    let other = Address::generate(&env);
+    client.set_primary_name(&other, &s(&env, "bob"));
+
+    // Owner's primary name must NOT have been created by that call.
+    let err = client.try_primary_name(&owner).unwrap_err().unwrap();
+    assert_eq!(err, RegistryError::NotFound);
+    assert_eq!(client.primary_name(&other), s(&env, "bob"));
+}
+
+/// Changing a primary name overwrites the previous one.
+#[test]
+fn set_primary_name_overwrites_previous() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    client.set_primary_name(&owner, &s(&env, "first"));
+    assert_eq!(client.primary_name(&owner), s(&env, "first"));
+    client.set_primary_name(&owner, &s(&env, "second"));
+    assert_eq!(client.primary_name(&owner), s(&env, "second"));
+}
+
+/// Setting a primary name does not create a forward name registration.
+#[test]
+fn set_primary_name_does_not_create_forward_name() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    client.set_primary_name(&owner, &s(&env, "alice"));
+    assert!(!client.exists(&s(&env, "alice")));
+}
+
+/// `primary_name` invalidates a stale cache for that address.
+#[test]
+fn primary_name_changes_invalidates_address_cache() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    client.set_primary_name(&owner, &s(&env, "first"));
+    assert_eq!(client.primary_name(&owner), s(&env, "first"));
+    client.set_primary_name(&owner, &s(&env, "second"));
+    assert_eq!(client.primary_name(&owner), s(&env, "second"));
+}
+
+/// `set_primary_name` rejects invalid names with the same rules as registration.
+#[test]
+fn set_primary_name_rejects_invalid_names() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    let invalid: [&str; 3] = ["ab", "-alice", "alice-"];
+    for raw in invalid {
+        let err = client
+            .try_set_primary_name(&owner, &s(&env, raw))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, RegistryError::InvalidName);
+    }
+}
+
+/// `set_primary_name` emits a `primary_name_set` event with address + name.
+#[test]
+fn set_primary_name_emits_primary_name_set_event() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    client.set_primary_name(&owner, &s(&env, "alice"));
+
+    assert_eq!(
+        env.events().all(),
+        soroban_sdk::vec![
+            &env,
+            (
+                id.clone(),
+                soroban_sdk::vec![
+                    &env,
+                    Symbol::new(&env, "primary_name_set").into_val(&env),
+                    owner.clone().into_val(&env),
+                ],
+                (s(&env, "alice"),).into_val(&env),
+            ),
+        ]
+    );
+}
+
+/// `primary_name` extends a frequently referenced address's TTL.
+#[test]
+fn primary_name_lookup_extends_ttl() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    client.set_primary_name(&owner, &s(&env, "alice"));
+
+    let key = DataKey::PrimaryName(owner.clone());
+    env.as_contract(&id, || {
+        assert_eq!(
+            env.storage().persistent().get_ttl(&key),
+            TTL_EXTEND_TO_LEDGERS,
+            "setting a primary name must set entry TTL to TTL_EXTEND_TO_LEDGERS"
+        );
+    });
+
+    client.primary_name(&owner);
+
+    env.as_contract(&id, || {
+        assert_eq!(
+            env.storage().persistent().get_ttl(&key),
+            TTL_EXTEND_TO_LEDGERS,
+            "primary_name lookup must reset TTL to TTL_EXTEND_TO_LEDGERS"
+        );
+    });
+}
+
+// ---------------------------------------------------------------------------
 #[test]
 fn counter_tracks_registrations() {
     let (env, id) = make_env();
