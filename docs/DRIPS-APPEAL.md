@@ -120,13 +120,15 @@ commands, and an explicit contract/SDK/dashboard dependency.
 ## Remaining work before submission
 
 - Push the three local `main` branches through reviewed pull requests.
-- Deploy the merged contract with a selected testnet identity.
-- Run register, resolve, address update, transfer, `set_primary_name`, and
+- [x] Deploy the merged contract with the selected `grantfox-arbiter` testnet
+  identity.
+- [x] Run register, resolve, address update, transfer, `set_primary_name`, and
   `primary_name` against that deployment.
-- Replace [`testnet-smoke-receipt.template.json`](testnet-smoke-receipt.template.json)
-  with the receipt containing transaction hashes, event names, contract ID,
-  WASM hash, and tool versions.
-- Add final deployment and explorer links.
+- [x] Add the complete [testnet smoke receipt](testnet-smoke-receipt.json)
+  containing transaction hashes, event names, contract ID, WASM hash, and
+  tool versions.
+- [x] Add deployment and explorer links.
+- [ ] Push the three reviewed PRs through maintainer approval and merge.
 - Submit only through the official Drips appeals form after the two-week wait.
 
 The currently documented testnet contract predates reverse resolution and must

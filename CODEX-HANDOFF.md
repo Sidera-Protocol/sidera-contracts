@@ -40,8 +40,9 @@ documentation branch and should not be used for implementation.
 - Full cross-repository verification is implemented; the default dashboard
   Turbopack build is environment-blocked here, while the webpack production
   build passes.
-- A fresh testnet receipt is still pending a caller-selected deployment
-  identity; the old deployment predates reverse resolution.
+- A fresh testnet receipt is committed at
+  `docs/testnet-smoke-receipt.json`; the old deployment predates reverse
+  resolution and remains historical only.
 - No final appeal should be submitted until improvements are merged and visible
   on the default branches.
 
@@ -57,10 +58,10 @@ APP_DIR=/home/meethybrid/Desktop/sidera-app \
 bash /home/meethybrid/Desktop/sidera/scripts/verify-suite.sh
 ```
 
-3. Deploy the merged contract with a caller-selected testnet identity, run the
-   complete smoke flow, and replace `docs/testnet-smoke-receipt.template.json`.
-4. Submit the bounded package in `docs/DRIPS-APPEAL.md` after the receipt and
-   deployment links are added.
+3. Push the reviewed PRs through maintainer approval and merge them into the
+   three remote default branches.
+4. Submit the bounded package in `docs/DRIPS-APPEAL.md` after the appeal window
+   opens.
 
 ## Reference lesson
 
