@@ -104,6 +104,9 @@ maintainable release path.
 
 The reproducible commands are in [`docs/DEVELOPMENT.md`](DEVELOPMENT.md), and
 the coordinated checks are in [`scripts/verify-suite.sh`](../scripts/verify-suite.sh).
+The end-to-end evidence is summarized in
+[`docs/PROJECT-PROOF.md`](PROJECT-PROOF.md), with transaction-level details in
+[`docs/testnet-smoke-receipt.json`](testnet-smoke-receipt.json).
 
 ## Requested Wave scope
 

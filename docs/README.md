@@ -38,6 +38,8 @@ repository and its security policy.
   security response, releases, and incident records.
 - Appeal preparation: [Drips appeal package](DRIPS-APPEAL.md) for the bounded
   flagship narrative, evidence, and remaining operator inputs.
+- Evidence: [project proof](PROJECT-PROOF.md) for live testnet, SDK, contract,
+  and dashboard verification.
 - Contributors: [contributor roadmap](CONTRIBUTOR-ROADMAP.md) for scoped,
   dependency-aware implementation tasks.
 - Issue authors: use the [contributor task template](../.github/ISSUE_TEMPLATE/wave_task.md)
