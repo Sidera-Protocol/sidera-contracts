@@ -36,6 +36,8 @@ repository and its security policy.
   for coordinated contract, SDK, and dashboard releases.
 - Operations: [maintainer runbook](MAINTAINER-RUNBOOK.md) for handoff,
   security response, releases, and incident records.
+- Appeal preparation: [Drips appeal package](DRIPS-APPEAL.md) for the bounded
+  flagship narrative, evidence, and remaining operator inputs.
 - Contributors: [contributor roadmap](CONTRIBUTOR-ROADMAP.md) for scoped,
   dependency-aware implementation tasks.
 - Issue authors: use the [contributor task template](../.github/ISSUE_TEMPLATE/wave_task.md)

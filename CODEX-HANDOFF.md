@@ -18,7 +18,7 @@ documentation branch and should not be used for implementation.
 
 ## Completed in contracts repository
 
-- Reverse-resolution contract implementation exists on the feature branch.
+- Reverse-resolution contract implementation is merged into local `main`.
 - Contract suite passes 41 tests.
 - README and documentation status was aligned with reverse resolution.
 - Added `docs/RELEASE-COMPATIBILITY.md`.
@@ -30,20 +30,25 @@ documentation branch and should not be used for implementation.
 
 ## Important current gaps
 
-- Reverse-resolution work is not yet merged into contracts `main`.
+- The local contracts `main` is ahead of its remote and must still be pushed
+  through the normal reviewed pull-request flow.
 - The SDK now provides `primaryName(address)` and `setPrimaryName(...)`, with
   tests and documentation.
 - The dashboard now displays and updates primary names in demo/live modes,
   including Freighter signing.
 - The obsolete dashboard `src/lib/sdk-shim.ts` has been removed.
-- Full cross-repository smoke verification is not yet implemented.
+- Full cross-repository verification is implemented; the default dashboard
+  Turbopack build is environment-blocked here, while the webpack production
+  build passes.
+- A fresh testnet receipt is still pending a caller-selected deployment
+  identity; the old deployment predates reverse resolution.
 - No final appeal should be submitted until improvements are merged and visible
   on the default branches.
 
 ## Next implementation
 
-1. Merge the contract reverse-resolution branch and the SDK/app changes into
-   their default branches.
+1. Push the local commits through reviewed pull requests into the three
+   default branches.
 2. Run:
 
 ```bash
@@ -52,8 +57,10 @@ APP_DIR=/home/meethybrid/Desktop/sidera-app \
 bash /home/meethybrid/Desktop/sidera/scripts/verify-suite.sh
 ```
 
-4. Merge and release the coordinated changes, then add the testnet evidence and
-   prepare the Drips appeal.
+3. Deploy the merged contract with a caller-selected testnet identity, run the
+   complete smoke flow, and replace `docs/testnet-smoke-receipt.template.json`.
+4. Submit the bounded package in `docs/DRIPS-APPEAL.md` after the receipt and
+   deployment links are added.
 
 ## Reference lesson
 
