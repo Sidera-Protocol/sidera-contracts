@@ -4,11 +4,13 @@ This roadmap turns Sidera's next milestones into independently reviewable
 tasks. Every task should become a GitHub issue with one owner, one outcome,
 acceptance criteria, and verification commands.
 
-## Tranche 1 — compatible core release
+## Tranche 1 — compatible core release ✅
 
-These tasks should be completed before expanding protocol scope.
+These tasks are complete and provide the baseline for the coordinated release.
 
 ### 1. SDK reverse-resolution parity
+
+**Status:** Complete (`06b8e87`)
 
 **Repository:** `sidera-sdk`  
 **Depends on:** deployed registry ABI and contract tests  
@@ -26,6 +28,8 @@ These tasks should be completed before expanding protocol scope.
 
 ### 2. Dashboard primary-name flow
 
+**Status:** Complete (`68abed1`)
+
 **Repository:** `sidera-app`  
 **Depends on:** SDK reverse-resolution parity  
 **Outcome:** a connected wallet can view and set its preferred `.sid` name.
@@ -40,6 +44,8 @@ These tasks should be completed before expanding protocol scope.
 - `npm run lint` and `npm run build` pass.
 
 ### 3. End-to-end testnet smoke receipt
+
+**Status:** Complete; see [`testnet-smoke-receipt.json`](testnet-smoke-receipt.json)
 
 **Repository:** `sidera-contracts`  
 **Depends on:** stable contract ABI  

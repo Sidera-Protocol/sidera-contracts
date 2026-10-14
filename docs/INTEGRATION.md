@@ -34,7 +34,7 @@ entrypoints directly:
 ```typescript
 import { contract } from "@stellar/stellar-sdk";
 
-const REGISTRY_ID = "CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ";
+const REGISTRY_ID = "CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
@@ -62,7 +62,7 @@ The same call from the CLI (useful for smoke-testing a deployment):
 
 ```bash
 stellar contract invoke \
-  --id CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ \
+  --id CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC \
   --network testnet \
   --fn resolve --arg alice
 ```
@@ -77,6 +77,7 @@ topic, so indexers can subscribe once and filter by name or by event:
 | `registered` | `("registered", name)` | `(owner, address, memo)` | A new name exists |
 | `address_set` | `("address_set", name)` | `(caller, address, memo)` | Payment record updated |
 | `transferred` | `("transferred", name)` | `(caller, new_owner)` | Ownership moved |
+| `primary_name_set` | `("primary_name_set", address)` | `(name)` | Preferred reverse name changed |
 
 A wallet that caches resolutions should re-resolve when it observes
 `address_set` or `transferred` for a name it holds.

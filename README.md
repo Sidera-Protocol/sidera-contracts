@@ -39,7 +39,7 @@ Next tranches: pricing & renewals, subnames, and broader SDK/indexer tooling.
 ```
 contracts/registry   # Soroban name registry (Rust, no_std, SDK 27.x)
 docs/                # Protocol docs and the resolver interface spec
-packages/ts-sdk      # TypeScript resolution SDK (planned)
+../sidera-sdk        # TypeScript resolution SDK (separate repository)
 ```
 
 ## Testnet deployment proof
@@ -47,12 +47,12 @@ packages/ts-sdk      # TypeScript resolution SDK (planned)
 | Item | Value |
 |---|---|
 | Network | Stellar **Testnet** |
-| Deployed | 2026-09-24 |
-| Contract ID | `CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ` |
-| WASM sha256 | see `provenance` after CI run — artifact `sidera_registry.wasm` (11,061 bytes) |
-| Live round-trip | `register("sidera")` → `total_names()=1` → `owner_of` → `resolve` all confirmed via stellar-cli 28.0.0 |
+| Deployed | 2026-10-14 |
+| Contract ID | `CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC` |
+| WASM sha256 | `a15727e6210c1f8dd4ffb0bf71cb26c64a735a1fcc0d4f63e0af9b340c0ed3e1` (17,362 bytes) |
+| Live round-trip | register → resolve → address update → transfer → `set_primary_name` → `primary_name` confirmed via stellar-cli 28.0.0 |
 
-Explorer: <https://stellar.expert/explorer/testnet/contract/CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ>
+Explorer: <https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC>
 
 > The registry is deployed on **Stellar testnet only** — no mainnet
 > deployment exists. Do not send real funds based on name resolution until a

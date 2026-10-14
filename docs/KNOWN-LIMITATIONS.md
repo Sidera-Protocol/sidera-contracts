@@ -30,9 +30,10 @@ not a hidden gap.
 
 ## Tooling
 
-- **No TypeScript SDK yet.** `packages/ts-sdk` is a planned tranche; the
-  resolver interface spec is the contract wallets code against in the
-  meantime.
+- **SDK is maintained separately.** The TypeScript SDK now supports forward
+  and reverse resolution, but it is a separate package and release from this
+  contracts repository; consumers must align its version with the deployed
+  contract ABI.
 - **No indexer.** There is no off-chain index of registrations; all reads
   go through the contract.
 

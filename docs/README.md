@@ -20,8 +20,8 @@ provides a user-facing integration of both layers.
 
 The registry is deployed on Stellar **Testnet** only:
 
-- Contract: `CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ`
-- Explorer: [stellar.expert testnet contract page](https://stellar.expert/explorer/testnet/contract/CAJL7DAFAICOVMO7WXU4UUVFIAY6SODAECJPPNXPXKNUJQTNCD4GZKVQ)
+- Contract: `CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC`
+- Explorer: [Stellar Lab testnet contract page](https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC)
 
 There is no mainnet deployment. Do not send real funds based on name
 resolution until a mainnet deployment is announced in the contracts
@@ -65,7 +65,7 @@ repository and its security policy.
 ## Planned work
 
 Planned issues may cover pricing and renewals, subnames, resolver and memo
-safety, SDK reverse-resolution parity, wallet integration, dashboard
-workflows, testing, security review, documentation, and developer tooling.
+safety, indexer support, wallet integration, dashboard workflows, testing,
+security review, documentation, and developer tooling.
 Cross-repository changes should explain which contract, SDK, and application
 surfaces need to stay compatible.
