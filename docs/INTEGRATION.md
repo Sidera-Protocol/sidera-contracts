@@ -96,14 +96,14 @@ cares about:
 
 If you also cache reverse-resolution results produced by `primary_name`,
 invalidate them when the address owner calls `set_primary_name` or when the
-address record changes in a way your wallet tracks. For now, the SDK
-snippet below only exercises `resolve`; it does not call `primary_name`, so
-there is no SDK-side parity requirement in this repo unless the snippet is
-updated to cover both entrypoints.
+address record changes in a way your wallet tracks. The SDK exposes both
+`primaryName(address)` and `setPrimaryName(address, name)`; integrations
+should use those methods rather than duplicating contract invocation logic.
 
 ## What Sidera does not do yet
 
-Reverse resolution, subnames, and pricing/renewals are future tranches —
-see [KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md) and the roadmap in the
-[README](../README.md#status). The registry is deployed on **testnet only**;
+Subnames and pricing/renewals are future tranches — see
+[KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md) and the roadmap in the
+[README](../README.md#status). Reverse resolution is implemented across the
+registry, SDK, and dashboard. The registry is deployed on **testnet only**;
 do not point production payment flows at it.

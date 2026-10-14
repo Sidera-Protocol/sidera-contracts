@@ -32,9 +32,18 @@ repository and its security policy.
 - Contract developers: [architecture](ARCHITECTURE.md),
   [development and release checks](DEVELOPMENT.md), [resolver interface](resolver-interface.md),
   and [known limitations](KNOWN-LIMITATIONS.md).
+- Maintainers: [release and compatibility policy](RELEASE-COMPATIBILITY.md)
+  for coordinated contract, SDK, and dashboard releases.
+- Operations: [maintainer runbook](MAINTAINER-RUNBOOK.md) for handoff,
+  security response, releases, and incident records.
+- Contributors: [contributor roadmap](CONTRIBUTOR-ROADMAP.md) for scoped,
+  dependency-aware implementation tasks.
+- Issue authors: use the [contributor task template](../.github/ISSUE_TEMPLATE/wave_task.md)
+  so each task has an outcome, acceptance criteria, and verification steps.
 - SDK integrators: the [SDK README](https://github.com/Sidera-Protocol/sidera-sdk#readme)
   and [API reference](https://github.com/Sidera-Protocol/sidera-sdk/blob/main/docs/API.md)
-  for installation, reads, writes, signing, and name validation.
+  for installation, reads, writes, signing, name validation, and reverse
+  resolution. The SDK must remain aligned with the deployed registry ABI.
 - Application developers: the [dashboard README](https://github.com/Sidera-Protocol/sidera-app#readme)
   and [troubleshooting guide](https://github.com/Sidera-Protocol/sidera-app/blob/main/docs/TROUBLESHOOTING.md)
   for local setup, environment variables, and the testnet demo.
@@ -51,7 +60,8 @@ repository and its security policy.
 
 ## Planned work
 
-Planned issues may cover registry features, resolver and memo safety, SDK
-behavior, wallet integration, dashboard workflows, testing, security review,
-documentation, and developer tooling. Cross-repository changes should explain
-which contract, SDK, and application surfaces need to stay compatible.
+Planned issues may cover pricing and renewals, subnames, resolver and memo
+safety, SDK reverse-resolution parity, wallet integration, dashboard
+workflows, testing, security review, documentation, and developer tooling.
+Cross-repository changes should explain which contract, SDK, and application
+surfaces need to stay compatible.
