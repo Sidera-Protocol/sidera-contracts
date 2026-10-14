@@ -16,16 +16,17 @@ wallets stop asking users to paste 56 characters.
 
 ## Status
 
-Day-1 MVP: `register` / `resolve` / `set_address` / `transfer` /
-`owner_of` with TTL-extend-on-write so long-held names never archive.
-Next tranches: pricing & renewals, reverse resolution, subnames, TS SDK.
+Current MVP: `register` / `resolve` / `set_address` / `transfer` /
+`owner_of` plus reverse resolution through `primary_name` and
+`set_primary_name`, with TTL-extend-on-write so long-held names never archive.
+Next tranches: pricing & renewals, subnames, and broader SDK/indexer tooling.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [Project documentation hub](docs/README.md) | Repository map, deployment status, integration flow, and contributor starting points |
-| [Resolver interface](docs/resolver-interface.md) | The contract every Sidera-compatible wallet and payment app codes against: `Resolution` shape, wallet memo rules, planned reverse resolution |
+| [Resolver interface](docs/resolver-interface.md) | The contract every Sidera-compatible wallet and payment app codes against: `Resolution` shape, wallet memo rules, and reverse resolution |
 | [Integration guide](docs/INTEGRATION.md) | How to integrate resolution into a wallet or payment app: the four rules, memo handling, and code snippets |
 | [Changelog](CHANGELOG.md) | Notable changes per release (Keep a Changelog format) |
 | [Known limitations](docs/KNOWN-LIMITATIONS.md) | Exactly what Sidera does and does not do yet |

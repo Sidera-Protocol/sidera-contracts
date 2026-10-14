@@ -16,6 +16,7 @@
 //! - `registered(name)` — `(owner, address, memo)` — a name was registered.
 //! - `address_set(name)` — `(caller, address, memo)` — the payment record changed.
 //! - `transferred(name)` — `(caller, new_owner)` — ownership moved.
+//! - `primary_name_set(address)` — `(address, name)` — an address set a display name.
 #![no_std]
 // Soroban `#[contractimpl]` entrypoints take parameters **by value**: the SDK
 // macro derives the contract ABI from the exported signature, so `&Env` or
@@ -114,6 +115,8 @@ enum DataKey {
     Name(String),
     /// The owner `Address` of `String` name.
     Owner(String),
+    /// The preferred display name for `Address`.
+    PrimaryName(Address),
     /// Monotonic registration counter (hot, small, instance storage).
     Count,
 }
@@ -130,6 +133,23 @@ const TTL_EXTEND_TO_LEDGERS: u32 = 518_400; // 30 days
 /// registry stores implicitly).
 const NAME_MIN_LEN: u32 = 3;
 const NAME_MAX_LEN: u32 = 32;
+
+/// The primary-name record for an address.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrimaryNameRecord {
+    pub name: String,
+}
+
+/// Emitted when an address sets its preferred display name.
+/// Topics: `("primary_name_set", address)`; data (in order): `address`, `name`.
+#[contractevent(topics = ["primary_name_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrimaryNameSet {
+    #[topic]
+    pub address: Address,
+    pub name: String,
+}
 
 /// The deployable Sidera registry contract.
 #[contract]
@@ -195,6 +215,62 @@ impl SideraRegistry {
         .publish(&env);
 
         Ok(name)
+    }
+
+    /// Set the preferred display name for `address`. Owner-only.
+    ///
+    /// The registry stores `name` **without** the `.sid` suffix; wallets
+    /// should append it when displaying the result of `primary_name`.
+    ///
+    /// Setting a primary name does not create or modify a forward name
+    /// registration: any address owner can set a display name for its own
+    /// address.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::InvalidName`] — `name` failed validation.
+    /// * [`RegistryError::Unauthorized`] — `address` did not authorize the write.
+    pub fn set_primary_name(env: Env, address: Address, name: String) -> Result<(), RegistryError> {
+        address.require_auth();
+        Self::validate_name(&name)?;
+
+        let key = DataKey::PrimaryName(address.clone());
+        let record = PrimaryNameRecord { name: name.clone() };
+        env.storage().persistent().set(&key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+
+        PrimaryNameSet {
+            address: address.clone(),
+            name: name.clone(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Return the preferred display name for `address`, if one has been set.
+    ///
+    /// Returns [`RegistryError::NotFound`] when `address` has no primary name.
+    ///
+    /// Read-only but TTL-aware: looking up a primary name bumps its entry so a
+    /// frequently referenced address does not lose its display name.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::NotFound`] — `address` has no primary name.
+    pub fn primary_name(env: Env, address: Address) -> Result<String, RegistryError> {
+        let key = DataKey::PrimaryName(address.clone());
+        let record: PrimaryNameRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(RegistryError::NotFound)?;
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+        Ok(record.name)
     }
 
     /// Resolve `name` to its payment destination (address + memo hint).
