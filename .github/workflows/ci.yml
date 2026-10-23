@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block auto-run configs, binary payloads and npm lifecycle hooks
+        run: bash scripts/check-repo-hygiene.sh
+      - name: SideraGuard scanner regression tests
+        run: bash scripts/sideraguard/test-scan.sh
+      - name: SideraReview regression tests
+        run: bash scripts/siderareview/test-review.sh
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
