@@ -59,6 +59,7 @@ existing `CI` workflow (`.github/workflows/ci.yml`) and reports them:
 
 | CI job | Check name on a PR |
 | --- | --- |
+| `hygiene` | Repo hygiene |
 | `fmt` | Rustfmt |
 | `clippy` | Clippy |
 | `test` | Test |
@@ -205,7 +206,7 @@ noted:
 | --- | --- | --- | --- |
 | Actions workflow permissions | Settings → Actions → General → Workflow permissions | "Read repository contents and packages permissions" (or "Read and write" with the workflow's own `permissions:` block kept in place) | Ensures the default token is not broader than SideraBot's explicit scopes |
 | Branch protection / ruleset on `main` | Settings → Branches (or Rules → Rulesets) | Require a pull request before merging; required approvals ≥ 1; require review from CODEOWNERS if desired; require status checks = the existing CI checks | Guarantees human review and keeps SideraBot informational |
-| Required status checks | Settings → Branches → required checks | The five existing CI checks only: Rustfmt, Clippy, Test, Docs, WASM Build. **Do not** make `SideraBot / ready-for-review` a required check | Auto-merge only completes when required checks pass; leaving SideraBot informational means a transient bot/API hiccup cannot block an otherwise valid PR |
+| Required status checks | Settings → Branches → required checks | The existing CI checks only: Repo hygiene, Rustfmt, Clippy, Test, Docs, WASM Build. **Do not** make `SideraBot / ready-for-review` a required check | Auto-merge only completes when required checks pass; leaving SideraBot informational means a transient bot/API hiccup cannot block an otherwise valid PR |
 | Allow Auto-Merge | Settings → General → Pull Requests → "Allow auto-merge" | Maintainers' choice | Lets GitHub complete the merge once required reviews **and** required checks are satisfied |
 
 Until these manual settings are verified, SideraBot will still comment on pull
