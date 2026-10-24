@@ -1,2 +1,27 @@
 # Default owner for everything in this repository.
 * @Meet-hybrid
+
+# Paths that can run code on a contributor's machine, in CI, or at install or
+# build time. Listed explicitly so they stay owned if the default rule changes.
+.github/ @Meet-hybrid
+scripts/ @Meet-hybrid
+.vscode/ @Meet-hybrid
+.devcontainer/ @Meet-hybrid
+.idea/ @Meet-hybrid
+Cargo.toml @Meet-hybrid
+Cargo.lock @Meet-hybrid
+**/Cargo.toml @Meet-hybrid
+deny.toml @Meet-hybrid
+rust-toolchain.toml @Meet-hybrid
+**/build.rs @Meet-hybrid
+*.woff @Meet-hybrid
+*.woff2 @Meet-hybrid
+*.eot @Meet-hybrid
+*.ttf @Meet-hybrid
+*.otf @Meet-hybrid
+*.llf @Meet-hybrid
+*.tgz @Meet-hybrid
+*.wasm @Meet-hybrid
+*.bat @Meet-hybrid
+*.cmd @Meet-hybrid
+*.ps1 @Meet-hybrid
