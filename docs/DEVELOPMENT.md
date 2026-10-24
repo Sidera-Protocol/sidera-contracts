@@ -11,6 +11,18 @@ cargo test --workspace --all-targets --locked
 cargo build --locked --release --target wasm32v1-none -p sidera-registry
 ```
 
+## Full suite verification
+
+From the contracts checkout, run the contract checks plus the local SDK and
+dashboard checks with one command:
+
+```bash
+SDK_DIR=../sidera-sdk APP_DIR=../sidera-app bash scripts/verify-suite.sh
+```
+
+Leaving either variable unset intentionally runs only the contract checks and
+prints which repository was skipped.
+
 The contract build must use the pinned lockfile and the `wasm32v1-none`
 target. Changes to storage, authorization, name validation, TTL behavior, or
 resolver output should include focused tests.

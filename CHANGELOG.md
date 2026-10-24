@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Reverse resolution**: addresses can set and query a preferred primary
+  name through `set_primary_name` and `primary_name`, with owner
+  authorization, TTL handling, events, and focused tests.
+- **Reverse-resolution testnet deployment**: the updated registry is live at
+  `CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC`; see the
+  committed smoke receipt for transaction links and the WASM hash.
 - **Contract events**: the registry now emits `registered`, `address_set`, and
   `transferred` events (topics: event symbol + name), so indexers, wallets, and
   explorers can observe registry state changes without polling contract

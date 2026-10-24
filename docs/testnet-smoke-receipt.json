@@ -1,0 +1,86 @@
+{
+  "status": "passed",
+  "executed_at": "2026-10-14",
+  "network": "testnet",
+  "contract_id": "CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC",
+  "contract_explorer": "https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC",
+  "wasm_sha256": "a15727e6210c1f8dd4ffb0bf71cb26c64a735a1fcc0d4f63e0af9b340c0ed3e1",
+  "wasm_bytes": 17362,
+  "source_revision": "d33697c",
+  "release_branch_head": "6c4a8f3",
+  "tool_versions": {
+    "stellar_cli": "28.0.0",
+    "rust": "1.96.0",
+    "soroban_sdk": "27.0.6"
+  },
+  "identities": {
+    "initial_owner": "grantfox-arbiter",
+    "initial_owner_address": "GCR7CBH7IEMOB74H23HFEMMRPQKNJAFIORCHLYU4X5HQFUOF7E7RGJTQ",
+    "transferred_owner": "grantfox-buyer",
+    "transferred_owner_address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF"
+  },
+  "deployment": {
+    "wasm_upload_transaction": "00ec386b4840e90eef7393719315707bab3959d4f8e6e48d6b10a6befd76c0e0",
+    "wasm_upload_explorer": "https://stellar.expert/explorer/testnet/tx/00ec386b4840e90eef7393719315707bab3959d4f8e6e48d6b10a6befd76c0e0",
+    "deploy_transaction": "78a6ad05351e051b9b4c6e29db8cd63ccdfa07b50ce937912546448712a92597",
+    "deploy_explorer": "https://stellar.expert/explorer/testnet/tx/78a6ad05351e051b9b4c6e29db8cd63ccdfa07b50ce937912546448712a92597"
+  },
+  "smoke_name": "sidera-release-20261014",
+  "steps": [
+    {
+      "action": "register",
+      "transaction": "8c14fd8153eed9caebdaf51836269a17636cc21951737a189b5cf456cf12e689",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/8c14fd8153eed9caebdaf51836269a17636cc21951737a189b5cf456cf12e689",
+      "event": "registered",
+      "result": "sidera-release-20261014"
+    },
+    {
+      "action": "resolve",
+      "transaction": null,
+      "result": {
+        "address": "GCR7CBH7IEMOB74H23HFEMMRPQKNJAFIORCHLYU4X5HQFUOF7E7RGJTQ",
+        "memo": "sidera-smoke"
+      }
+    },
+    {
+      "action": "set_address",
+      "transaction": "f8d0650398925e00deddf12b7bc8493b8456deaf32dba7eb6ac154cde705026f",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/f8d0650398925e00deddf12b7bc8493b8456deaf32dba7eb6ac154cde705026f",
+      "event": "address_set",
+      "result": {
+        "address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
+        "memo": "updated-smoke"
+      }
+    },
+    {
+      "action": "transfer",
+      "transaction": "59a92369c34a0b058db98e755657f04170c4ca6a055294615152ce8b671815e4",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/59a92369c34a0b058db98e755657f04170c4ca6a055294615152ce8b671815e4",
+      "event": "transferred",
+      "result": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF"
+    },
+    {
+      "action": "set_primary_name",
+      "transaction": "fa8b0c143bd10f310a1311c3912c49774b11dcd90c237cc056bdb7bc1b2a8a60",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/fa8b0c143bd10f310a1311c3912c49774b11dcd90c237cc056bdb7bc1b2a8a60",
+      "event": "primary_name_set",
+      "result": "sidera-release-20261014"
+    },
+    {
+      "action": "primary_name",
+      "transaction": null,
+      "result": "sidera-release-20261014"
+    }
+  ],
+  "post_transfer_checks": {
+    "owner_of": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
+    "resolve": {
+      "address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
+      "memo": "updated-smoke"
+    }
+  },
+  "notes": [
+    "No secret keys or seed phrases are recorded.",
+    "The deployment and all writes use Stellar testnet only."
+  ]
+}
