@@ -1,6 +1,6 @@
 # SideraGuard
 
-**SideraGuard is a repository automation tool. It is NOT an official Drips or
+**SideraGuard is a repository automation tool. It is NOT an official
 Stellar bot.** It runs entirely on GitHub Actions with the
 repository's `GITHUB_TOKEN`; there is no separate account or GitHub App.
 

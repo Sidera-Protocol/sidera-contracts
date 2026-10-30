@@ -1,6 +1,6 @@
 # SideraReview
 
-**SideraReview is a Sidera automation tool. It is NOT an official Drips or
+**SideraReview is a Sidera automation tool. It is NOT an official
 Stellar bot.**
 
 SideraReview helps maintainers review pull requests faster. After CI finishes on
