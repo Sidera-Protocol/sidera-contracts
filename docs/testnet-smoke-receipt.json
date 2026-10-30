@@ -14,9 +14,9 @@
     "soroban_sdk": "27.0.6"
   },
   "identities": {
-    "initial_owner": "grantfox-arbiter",
+    "initial_owner": "sidera-smoke-owner",
     "initial_owner_address": "GCR7CBH7IEMOB74H23HFEMMRPQKNJAFIORCHLYU4X5HQFUOF7E7RGJTQ",
-    "transferred_owner": "grantfox-buyer",
+    "transferred_owner": "sidera-smoke-recipient",
     "transferred_owner_address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF"
   },
   "deployment": {

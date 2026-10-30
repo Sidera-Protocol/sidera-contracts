@@ -36,8 +36,6 @@ repository and its security policy.
   for coordinated contract, SDK, and dashboard releases.
 - Operations: [maintainer runbook](MAINTAINER-RUNBOOK.md) for handoff,
   security response, releases, and incident records.
-- Appeal preparation: [Drips appeal package](DRIPS-APPEAL.md) for the bounded
-  flagship narrative, evidence, and remaining operator inputs.
 - Evidence: [project proof](PROJECT-PROOF.md) for live testnet, SDK, contract,
   and dashboard verification.
 - Contributors: [contributor roadmap](CONTRIBUTOR-ROADMAP.md) for scoped,
