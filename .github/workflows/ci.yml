@@ -81,14 +81,14 @@ jobs:
           for wasm in target/wasm32v1-none/release/*.wasm; do
             echo "$(basename "$wasm"): $(stat -c%s "$wasm") bytes"
           done
-      # Budget enforcement (registry WASM was 11,061 bytes at MVP): the
-      # limit is generous headroom for the pricing/renewals and reverse
-      # resolution tranches, but a runaway dependency or accidental
-      # feature-flag slip fails CI instead of shipping silently. Raise the
-      # budget deliberately, in a reviewed PR.
+      # Budget enforcement (registry WASM was 11,061 bytes at MVP, 17,362
+      # with reverse resolution, ~39,800 with pricing, renewals, expiry and
+      # the admin config; ~31,200 after `stellar contract optimize`). A
+      # runaway dependency or accidental feature-flag slip fails CI instead
+      # of shipping silently. Raise the budget deliberately, in a reviewed PR.
       - name: Enforce maximum WASM size
         run: |
-          MAX_SIZE=32768
+          MAX_SIZE=49152
           shopt -s nullglob
           found=0
           for wasm in target/wasm32v1-none/release/*.wasm; do

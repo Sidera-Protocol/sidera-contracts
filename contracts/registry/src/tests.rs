@@ -8,12 +8,17 @@ const TTL_EXTEND_TO_LEDGERS: u32 = 518_400;
 
 fn make_env() -> (Env, Address) {
     let env = Env::default();
-    let id = env.register(SideraRegistry, ());
+    let id = crate::testutil::deploy(&env, crate::testutil::free()).id;
     (env, id)
 }
 
 fn s(env: &Env, raw: &str) -> String {
     String::from_str(env, raw)
+}
+
+/// Register `name` to `who`, resolving to `who` (what a primary name needs).
+fn own(client: &SideraRegistryClient<'_>, env: &Env, name: &str, who: &Address) {
+    client.register(&s(env, name), who, who, &None, &1);
 }
 
 #[test]
@@ -24,7 +29,7 @@ fn register_and_resolve_roundtrip() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "alice"), &owner, &dest, &None);
+    client.register(&s(&env, "alice"), &owner, &dest, &None, &1);
 
     let resolution = client.resolve(&s(&env, "alice"));
     assert_eq!(resolution.address, dest);
@@ -42,7 +47,7 @@ fn memo_hint_roundtrips() {
     let dest = Address::generate(&env);
     let memo = s(&env, "1029384756");
 
-    client.register(&s(&env, "bob"), &owner, &dest, &Some(memo.clone()));
+    client.register(&s(&env, "bob"), &owner, &dest, &Some(memo.clone()), &1);
 
     let resolution = client.resolve(&s(&env, "bob"));
     assert_eq!(resolution.address, dest);
@@ -57,9 +62,9 @@ fn register_rejects_duplicate_name() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "carol"), &owner, &dest, &None);
+    client.register(&s(&env, "carol"), &owner, &dest, &None, &1);
     let err = client
-        .try_register(&s(&env, "carol"), &owner, &dest, &None)
+        .try_register(&s(&env, "carol"), &owner, &dest, &None, &1)
         .unwrap_err()
         .unwrap();
     assert_eq!(err, RegistryError::NameTaken);
@@ -89,11 +94,18 @@ fn register_demands_owner_authorization() {
             invoke: &MockAuthInvoke {
                 contract: &id,
                 fn_name: "register",
-                args: (s(&env, "dave"), owner.clone(), dest.clone(), None::<String>).into_val(&env),
+                args: (
+                    s(&env, "dave"),
+                    owner.clone(),
+                    dest.clone(),
+                    None::<String>,
+                    1_u32,
+                )
+                    .into_val(&env),
                 sub_invokes: &[],
             },
         }])
-        .register(&s(&env, "dave"), &owner, &dest, &None);
+        .register(&s(&env, "dave"), &owner, &dest, &None, &1);
 
     assert!(client.exists(&s(&env, "dave")));
 }
@@ -109,7 +121,7 @@ fn set_address_requires_current_owner() {
     let new_dest = Address::generate(&env);
     let memo = s(&env, "777");
 
-    client.register(&s(&env, "erin"), &owner, &dest, &None);
+    client.register(&s(&env, "erin"), &owner, &dest, &None, &1);
 
     // A non-owner is rejected.
     let err = client
@@ -135,7 +147,7 @@ fn transfer_moves_ownership() {
     let impostor = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "frank"), &owner, &dest, &None);
+    client.register(&s(&env, "frank"), &owner, &dest, &None, &1);
 
     // Only the current owner can transfer.
     let err = client
@@ -176,7 +188,7 @@ fn name_validation_rejects_bad_names() {
     ];
     for raw in bad_names {
         let err = client
-            .try_register(&s(&env, raw), &owner, &dest, &None)
+            .try_register(&s(&env, raw), &owner, &dest, &None, &1)
             .unwrap_err()
             .unwrap();
         assert_eq!(
@@ -188,7 +200,7 @@ fn name_validation_rejects_bad_names() {
 
     // Boundary: exactly 32 lowercase chars is accepted.
     let long_ok = s(&env, "abcdefghijklmnopqrstuvwxyzabcdef"); // 32 chars
-    client.register(&long_ok, &owner, &dest, &None);
+    client.register(&long_ok, &owner, &dest, &None, &1);
     assert!(client.exists(&long_ok));
 }
 
@@ -200,7 +212,7 @@ fn hyphenated_names_are_valid() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "alice-pay"), &owner, &dest, &None);
+    client.register(&s(&env, "alice-pay"), &owner, &dest, &None, &1);
     assert_eq!(client.resolve(&s(&env, "alice-pay")).address, dest);
 }
 
@@ -212,7 +224,7 @@ fn resolve_extends_the_name_ttl() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "grace"), &owner, &dest, &None);
+    client.register(&s(&env, "grace"), &owner, &dest, &None, &1);
 
     // Burn time down to just above the bump threshold: the name must still
     // be resolvable, and a resolve must refresh its lifetime.
@@ -259,6 +271,7 @@ fn primary_name_roundtrip() {
     let client = SideraRegistryClient::new(&env, &id);
     let address = Address::generate(&env);
 
+    own(&client, &env, "alice", &address);
     client.set_primary_name(&address, &s(&env, "alice"));
     assert_eq!(client.primary_name(&address), s(&env, "alice"));
 }
@@ -274,34 +287,82 @@ fn primary_name_missing_is_not_found() {
     assert_eq!(err, RegistryError::NotFound);
 }
 
-/// A non-owner cannot set the primary name for another address.
+/// An address cannot claim a name it does not own as its primary name, so
+/// no one can display themselves as someone else's name.
 #[test]
 fn set_primary_name_rejects_non_owner() {
     let (env, id) = make_env();
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
+    let impostor = Address::generate(&env);
 
-    // mock_all_auths means every address can authorize only for itself:
-    // `try_set_primary_name` as `owner` still passes owner's require_auth…
-    // BUT the write must be attributable to `owner` alone. What a real
-    // impostor can never do is inject a different `address` value and get
-    // it stored — the address comes from the (signed) argument, so any
-    // "impostor" call is just a write to their own key. The security
-    // property that must hold is: an unauthenticated call (no mock, no
-    // mock_all_auths) panics with the SDK auth error. That is already
-    // covered by `set_primary_name_requires_address_authorization`.
-    //
-    // Here we verify the equivalent *happy* property instead: a call can
-    // only ever write the primary name of the address that contracted it,
-    // never of a third party that did not participate.
-    let other = Address::generate(&env);
-    client.set_primary_name(&other, &s(&env, "bob"));
+    own(&client, &env, "alice", &owner);
 
-    // Owner's primary name must NOT have been created by that call.
-    let err = client.try_primary_name(&owner).unwrap_err().unwrap();
+    let err = client
+        .try_set_primary_name(&impostor, &s(&env, "alice"))
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, RegistryError::Unauthorized);
+    let err = client.try_primary_name(&impostor).unwrap_err().unwrap();
     assert_eq!(err, RegistryError::NotFound);
-    assert_eq!(client.primary_name(&other), s(&env, "bob"));
+}
+
+/// The owner cannot set a primary name for a name that resolves elsewhere:
+/// the display name must point back to the address showing it.
+#[test]
+fn set_primary_name_requires_name_to_resolve_to_address() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+    let elsewhere = Address::generate(&env);
+
+    client.register(&s(&env, "alice"), &owner, &elsewhere, &None, &1);
+
+    let err = client
+        .try_set_primary_name(&owner, &s(&env, "alice"))
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, RegistryError::Unauthorized);
+}
+
+/// A primary name stops showing as soon as it no longer points to its
+/// address: after a transfer, after a repoint, and after expiry.
+#[test]
+fn primary_name_stops_showing_when_it_no_longer_matches() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+    let other = Address::generate(&env);
+
+    own(&client, &env, "alice", &owner);
+    client.set_primary_name(&owner, &s(&env, "alice"));
+    client.set_address(&s(&env, "alice"), &owner, &other, &None);
+    assert_eq!(
+        client.try_primary_name(&owner).unwrap_err().unwrap(),
+        RegistryError::NotFound,
+        "repointed away"
+    );
+
+    own(&client, &env, "bobby", &owner);
+    client.set_primary_name(&owner, &s(&env, "bobby"));
+    client.transfer(&s(&env, "bobby"), &owner, &other);
+    assert_eq!(
+        client.try_primary_name(&owner).unwrap_err().unwrap(),
+        RegistryError::NotFound,
+        "transferred away"
+    );
+
+    own(&client, &env, "carol", &owner);
+    client.set_primary_name(&owner, &s(&env, "carol"));
+    env.ledger().with_mut(|l| l.timestamp += YEAR_SECONDS + 1);
+    assert_eq!(
+        client.try_primary_name(&owner).unwrap_err().unwrap(),
+        RegistryError::NotFound,
+        "expired"
+    );
 }
 
 /// Changing a primary name overwrites the previous one.
@@ -311,6 +372,8 @@ fn set_primary_name_overwrites_previous() {
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
+    own(&client, &env, "first", &owner);
+    own(&client, &env, "second", &owner);
 
     client.set_primary_name(&owner, &s(&env, "first"));
     assert_eq!(client.primary_name(&owner), s(&env, "first"));
@@ -318,15 +381,20 @@ fn set_primary_name_overwrites_previous() {
     assert_eq!(client.primary_name(&owner), s(&env, "second"));
 }
 
-/// Setting a primary name does not create a forward name registration.
+/// A primary name must be a registered name; setting one never creates a
+/// forward registration.
 #[test]
-fn set_primary_name_does_not_create_forward_name() {
+fn set_primary_name_requires_registered_name() {
     let (env, id) = make_env();
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
 
-    client.set_primary_name(&owner, &s(&env, "alice"));
+    let err = client
+        .try_set_primary_name(&owner, &s(&env, "alice"))
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotFound);
     assert!(!client.exists(&s(&env, "alice")));
 }
 
@@ -337,6 +405,8 @@ fn primary_name_changes_invalidates_address_cache() {
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
+    own(&client, &env, "first", &owner);
+    own(&client, &env, "second", &owner);
 
     client.set_primary_name(&owner, &s(&env, "first"));
     assert_eq!(client.primary_name(&owner), s(&env, "first"));
@@ -369,6 +439,7 @@ fn set_primary_name_emits_primary_name_set_event() {
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
+    own(&client, &env, "alice", &owner);
 
     client.set_primary_name(&owner, &s(&env, "alice"));
 
@@ -396,6 +467,7 @@ fn primary_name_lookup_extends_ttl() {
     env.mock_all_auths();
     let client = SideraRegistryClient::new(&env, &id);
     let owner = Address::generate(&env);
+    own(&client, &env, "alice", &owner);
 
     client.set_primary_name(&owner, &s(&env, "alice"));
 
@@ -429,8 +501,8 @@ fn counter_tracks_registrations() {
     let dest = Address::generate(&env);
 
     assert_eq!(client.total_names(), 0);
-    client.register(&s(&env, "name-one"), &owner, &dest, &None);
-    client.register(&s(&env, "name-two"), &owner, &dest, &None);
+    client.register(&s(&env, "name-one"), &owner, &dest, &None, &1);
+    client.register(&s(&env, "name-two"), &owner, &dest, &None, &1);
     assert_eq!(client.total_names(), 2);
 }
 
@@ -445,7 +517,7 @@ fn validation_rejects_max_length_overflow() {
     // 33 chars — one past the cap.
     let too_long = s(&env, "abcdefghijklmnopqrstuvwxyzabcdefg");
     let err = client
-        .try_register(&too_long, &owner, &dest, &None)
+        .try_register(&too_long, &owner, &dest, &None, &1)
         .unwrap_err()
         .unwrap();
     assert_eq!(err, RegistryError::InvalidName);
@@ -470,7 +542,7 @@ fn register_rejects_name_with_disallowed_symbol() {
     let dest = Address::generate(&env);
 
     let err = client
-        .try_register(&s(&env, "ali$e"), &owner, &dest, &None)
+        .try_register(&s(&env, "ali$e"), &owner, &dest, &None, &1)
         .unwrap_err()
         .unwrap();
     assert_eq!(err, RegistryError::InvalidName);
@@ -499,7 +571,7 @@ fn register_emits_registered_event() {
     let dest = Address::generate(&env);
     let memo = Some(s(&env, "404"));
 
-    client.register(&s(&env, "iris"), &owner, &dest, &memo);
+    client.register(&s(&env, "iris"), &owner, &dest, &memo, &1);
 
     assert_eq!(
         env.events().all(),
@@ -512,7 +584,7 @@ fn register_emits_registered_event() {
                     Symbol::new(&env, "registered").into_val(&env),
                     s(&env, "iris").into_val(&env),
                 ],
-                (owner, dest, memo).into_val(&env),
+                (owner, dest, memo, YEAR_SECONDS).into_val(&env),
             ),
         ]
     );
@@ -528,7 +600,7 @@ fn set_address_emits_address_set_event() {
     let new_dest = Address::generate(&env);
     let memo = Some(s(&env, "777"));
 
-    client.register(&s(&env, "jade"), &owner, &dest, &None);
+    client.register(&s(&env, "jade"), &owner, &dest, &None, &1);
     client.set_address(&s(&env, "jade"), &owner, &new_dest, &memo);
 
     assert_eq!(
@@ -557,7 +629,7 @@ fn transfer_emits_transferred_event() {
     let new_owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "kara"), &owner, &dest, &None);
+    client.register(&s(&env, "kara"), &owner, &dest, &None, &1);
     client.transfer(&s(&env, "kara"), &owner, &new_owner);
 
     assert_eq!(
@@ -610,7 +682,7 @@ fn transfer_requires_current_owner_mockauth() {
     let new_owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "luna"), &owner, &dest, &None);
+    client.register(&s(&env, "luna"), &owner, &dest, &None, &1);
 
     // Drain the event log so only the failed transfer attempt is visible.
     let _ = env.events().all();
@@ -684,43 +756,46 @@ fn name_ttl_accounting_after_registration_with_no_activity() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "moth"), &owner, &dest, &None);
+    client.register(&s(&env, "moth"), &owner, &dest, &None, &1);
     assert!(
         client.exists(&s(&env, "moth")),
         "name must exist right after registration"
     );
 
-    // Verify the TTL was set to TTL_EXTEND_TO_LEDGERS at registration.
+    // A paid registration keeps the name's entries alive for as long as the
+    // network allows (the owner paid for years, not 30 days).
     // get_ttl is only callable from within the contract's execution context.
     let name_key = DataKey::Name(s(&env, "moth"));
-    env.as_contract(&id, || {
-        assert_eq!(
-            env.storage().persistent().get_ttl(&name_key),
-            TTL_EXTEND_TO_LEDGERS,
-            "registration must set entry TTL to TTL_EXTEND_TO_LEDGERS"
-        );
-    });
+    let max = env.as_contract(&id, || env.storage().max_ttl());
+    for key in [
+        name_key.clone(),
+        DataKey::Owner(s(&env, "moth")),
+        DataKey::Expiry(s(&env, "moth")),
+    ] {
+        env.as_contract(&id, || {
+            assert_eq!(
+                env.storage().persistent().get_ttl(&key),
+                max,
+                "registration must extend every name entry to the maximum TTL"
+            );
+        });
+    }
 
-    // Advance past the original window — on-chain this would archive the
-    // entry; in the test environment auto-restoration kicks in.
+    // Let the entry age until it is just under the bump threshold.
     env.ledger().with_mut(|l| {
-        l.sequence_number = l.sequence_number.saturating_add(TTL_EXTEND_TO_LEDGERS + 1);
+        l.sequence_number = l
+            .sequence_number
+            .saturating_add(max - TTL_THRESHOLD_LEDGERS + 10);
     });
 
-    // The name is still accessible (auto-restore in test env).
-    // `resolve` also re-bumps the TTL to TTL_EXTEND_TO_LEDGERS.
+    // `resolve` still works and re-bumps the TTL to the 30-day window.
     let resolution = client.resolve(&s(&env, "moth"));
-    assert_eq!(
-        resolution.address, dest,
-        "resolve must succeed after auto-restoration"
-    );
-
-    // After the resolve-triggered bump, the TTL is back to TTL_EXTEND_TO_LEDGERS.
+    assert_eq!(resolution.address, dest, "resolve must still succeed");
     env.as_contract(&id, || {
         assert_eq!(
             env.storage().persistent().get_ttl(&name_key),
             TTL_EXTEND_TO_LEDGERS,
-            "resolve must reset TTL to TTL_EXTEND_TO_LEDGERS after auto-restoration"
+            "resolve must bump a name near the threshold back to TTL_EXTEND_TO_LEDGERS"
         );
     });
 }
@@ -741,7 +816,7 @@ fn resolve_inside_ttl_window_succeeds_and_resets_ttl() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "nova"), &owner, &dest, &None);
+    client.register(&s(&env, "nova"), &owner, &dest, &None, &1);
 
     // Advance to a ledger just past the bump threshold but still within the
     // original extend-to window — the entry is alive but would expire soon
@@ -783,7 +858,7 @@ fn resolve_at_exact_ttl_threshold_bumps_and_succeeds() {
     let owner = Address::generate(&env);
     let dest = Address::generate(&env);
 
-    client.register(&s(&env, "opal"), &owner, &dest, &None);
+    client.register(&s(&env, "opal"), &owner, &dest, &None, &1);
 
     // The entry was extended to TTL_EXTEND_TO_LEDGERS at registration.
     // Move to exactly (TTL_EXTEND_TO_LEDGERS - TTL_THRESHOLD_LEDGERS)
@@ -858,7 +933,7 @@ fn validation_extended_rejection_battery() {
 
     for (raw, label) in must_reject {
         let err = client
-            .try_register(&s(&env, raw), &owner, &dest, &None)
+            .try_register(&s(&env, raw), &owner, &dest, &None, &1)
             .unwrap_err()
             .unwrap();
         assert_eq!(
@@ -875,7 +950,7 @@ fn validation_extended_rejection_battery() {
     // Boundary accept: exactly 32 chars with an internal hyphen — valid.
     // "abcdefghijklmnopqrstuvwxyz-abcde" = 26 + 1 + 5 = 32 chars.
     let valid_32_with_hyphen = s(&env, "abcdefghijklmnopqrstuvwxyz-abcde"); // 32 chars
-    client.register(&valid_32_with_hyphen, &owner, &dest, &None);
+    client.register(&valid_32_with_hyphen, &owner, &dest, &None, &1);
     assert!(
         client.exists(&valid_32_with_hyphen),
         "32-char name with internal hyphen must be accepted"
@@ -930,7 +1005,7 @@ fn p1_arbitrary_names_never_half_register_deterministic() {
 
     for (raw, expect_accept) in cases {
         let name = s(&env, raw);
-        let result = client.try_register(&name, &owner, &dest, &None);
+        let result = client.try_register(&name, &owner, &dest, &None, &1);
 
         let accepted = match result {
             Ok(_) => true,
