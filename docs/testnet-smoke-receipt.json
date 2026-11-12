@@ -2,16 +2,16 @@
   "status": "passed",
   "executed_at": "2026-11-12",
   "network": "testnet",
-  "contract_id": "CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT",
-  "contract_explorer": "https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT",
-  "release": "pricing, renewals and expiry (yearly registration paid in a SEP-41 token)",
-  "source_revision": "ec3300d",
+  "contract_id": "CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT",
+  "contract_explorer": "https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT",
+  "release": "pricing, renewals and expiry; on-chain owner name list (names_of); admin upgrades",
+  "source_revision": "3e83b3f",
   "wasm": {
     "deployed": "stellar contract optimize output",
-    "deployed_sha256": "a7fbcce4832820080099e0e9fe4e69f8ef1d6cac084a0b0dd9ad455b478e34fb",
-    "deployed_bytes": 31244,
-    "cargo_release_sha256": "e755a4bc28a9b81e0c217ab6d811d2259f22858191bc7ac0c9ede60d89e6357a",
-    "cargo_release_bytes": 39829,
+    "deployed_sha256": "f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6",
+    "deployed_bytes": 34483,
+    "cargo_release_sha256": "4fbb50fe8cdcba3dbaa62df4e077cc0f6674f537148201fcbdccd46b049bed47",
+    "cargo_release_bytes": 44366,
     "reproduce": "cargo build --locked --release --target wasm32v1-none -p sidera-registry && stellar contract optimize --wasm target/wasm32v1-none/release/sidera_registry.wasm"
   },
   "tool_versions": {
@@ -41,12 +41,12 @@
     "renewer_and_impostor": "GAR6XKZ4TU4LYPADJMOSENPCLP5JAT5ZZCA4IACOHI7EV6AZUBMM4BQD"
   },
   "deployment": {
-    "wasm_upload_transaction": "ab7dbe165b60529d6265c465d2db41e85ea32d1ca85074ebad3659eae7b3af84",
-    "wasm_upload_explorer": "https://stellar.expert/explorer/testnet/tx/ab7dbe165b60529d6265c465d2db41e85ea32d1ca85074ebad3659eae7b3af84",
-    "deploy_transaction": "47218f73b4daadf4373d2822aaa4f4d22cb03bb224fb9e38ccdf7799a0b3ff4a",
-    "deploy_explorer": "https://stellar.expert/explorer/testnet/tx/47218f73b4daadf4373d2822aaa4f4d22cb03bb224fb9e38ccdf7799a0b3ff4a"
+    "wasm_upload_transaction": "0c64995b517d9d34a222301f046e125e44f79b944e35d0d94b73e10d41f2e624",
+    "wasm_upload_explorer": "https://stellar.expert/explorer/testnet/tx/0c64995b517d9d34a222301f046e125e44f79b944e35d0d94b73e10d41f2e624",
+    "deploy_transaction": "2b5e11b4e6ce5c07a4cbbb2bcf652c6ca0b6d7e65790c40432f5bb537a2a4760",
+    "deploy_explorer": "https://stellar.expert/explorer/testnet/tx/2b5e11b4e6ce5c07a4cbbb2bcf652c6ca0b6d7e65790c40432f5bb537a2a4760"
   },
-  "driver": "@sidera-protocol/sdk from packages/sdk (the same client the dashboard uses), signing each transaction with the Stellar CLI",
+  "driver": "@sidera-protocol/sdk from packages/sdk via scripts/testnet-smoke.mjs (the client the dashboard uses), each transaction signed by the Stellar CLI; upgrade steps via the Stellar CLI",
   "smoke_name": "alice-pay",
   "steps": [
     {
@@ -71,10 +71,10 @@
     },
     {
       "what": "register 2 years, paid by owner",
-      "hash": "b310aabad0dccb2d6d281f6aba26fa6574db3cb39460a1ae18d7a01da62bbb06",
-      "expiresAt": "2028-11-11T23:10:34.000Z",
+      "hash": "b30858a3d5f8aa16dca1d4ff7d50a06ff912b78ff256e68ebd66085a7fd5c5fb",
+      "expiresAt": "2028-11-11T23:40:14.000Z",
       "treasuryReceived": "40000000",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/b310aabad0dccb2d6d281f6aba26fa6574db3cb39460a1ae18d7a01da62bbb06"
+      "explorer": "https://stellar.expert/explorer/testnet/tx/b30858a3d5f8aa16dca1d4ff7d50a06ff912b78ff256e68ebd66085a7fd5c5fb"
     },
     {
       "what": "resolve (address + memo)",
@@ -86,17 +86,17 @@
     },
     {
       "what": "renew 1 year, paid by someone else",
-      "hash": "2fac425f9d3bfee8929c9548b6c9ad5fe497f81f75c5787577ab104cac6e7e8a",
-      "expiresAt": "2029-11-11T23:10:34.000Z",
+      "hash": "6fe5db0c7601049d3ecfba59dbeda21729bf218903115fd43d826b09c2b8aeff",
+      "expiresAt": "2029-11-11T23:40:14.000Z",
       "treasuryReceived": "20000000",
       "ownerUnchanged": true,
-      "explorer": "https://stellar.expert/explorer/testnet/tx/2fac425f9d3bfee8929c9548b6c9ad5fe497f81f75c5787577ab104cac6e7e8a"
+      "explorer": "https://stellar.expert/explorer/testnet/tx/6fe5db0c7601049d3ecfba59dbeda21729bf218903115fd43d826b09c2b8aeff"
     },
     {
       "what": "set primary name (owner, resolves to owner)",
-      "hash": "bdf24154ee678b9e1b7c440e924e827c95109e913852168617f9e3ca535dd104",
+      "hash": "27a0a4b2b332cce4240d25a698381469547caecabe4629d4dca5dcc4dbb79383",
       "primaryName": "alice-pay",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/bdf24154ee678b9e1b7c440e924e827c95109e913852168617f9e3ca535dd104"
+      "explorer": "https://stellar.expert/explorer/testnet/tx/27a0a4b2b332cce4240d25a698381469547caecabe4629d4dca5dcc4dbb79383"
     },
     {
       "what": "impostor cannot claim someone else's name as primary",
@@ -109,10 +109,55 @@
       "ok": true
     },
     {
+      "what": "names held by the owner, read from the registry",
+      "names": [
+        {
+          "name": "alice-pay",
+          "expiresAt": "2029-11-11T23:40:14.000Z"
+        }
+      ],
+      "includesName": true
+    },
+    {
       "what": "expiry read back",
-      "expiresAt": "2029-11-11T23:10:34.000Z",
+      "expiresAt": "2029-11-11T23:40:14.000Z",
       "available": false
+    },
+    {
+      "what": "upgrade attempted by a non-admin (sidera-bob)",
+      "result": "refused: the transaction needs the admin's signature"
+    },
+    {
+      "what": "upgrade by the admin (same WASM, proving the upgrade path)",
+      "hash": "fcec113736ab0d56302f9dc161a2dfb594e4a1048b9f8ca44d42ebf059179873",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/fcec113736ab0d56302f9dc161a2dfb594e4a1048b9f8ca44d42ebf059179873"
+    },
+    {
+      "what": "state after the upgrade, unchanged",
+      "resolve": {
+        "address": "GCSR2ZE22L2J7GG7AGJTMDXVG2TJIYBHGMTS2ARTGWBNH76NERHC6MMO",
+        "memo": "1029384756"
+      },
+      "names_of": [
+        {
+          "name": "alice-pay",
+          "expires_at": 1889134814
+        }
+      ],
+      "primary_name": "alice-pay",
+      "total_names": 1
     }
   ],
-  "previous_deployment": "docs/testnet-smoke-receipt-2026-10-14.json (CCZJ\u2026H7PC, before pricing; free registration)"
+  "previous_deployments": [
+    {
+      "contract_id": "CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT",
+      "date": "2026-11-12",
+      "note": "pricing and expiry, before names_of and upgrade; superseded"
+    },
+    {
+      "contract_id": "CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC",
+      "date": "2026-10-14",
+      "note": "free registration; receipt in docs/testnet-smoke-receipt-2026-10-14.json"
+    }
+  ]
 }

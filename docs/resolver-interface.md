@@ -73,6 +73,24 @@ fn price(env: Env, name: String, years: u32) -> Result<i128, RegistryError>;
 - After expiry the name stops resolving. For 30 days only renewal is
   possible; after that the name is released and anyone may register it.
 
+## Listing an owner's names
+
+```rust
+fn names_of(env: Env, owner: Address) -> Vec<OwnedName>;
+struct OwnedName { name: String, expires_at: u64 }
+```
+
+Returns the names `owner` holds, active or in their grace period, with their
+expiry, in registration order. It is kept up to date on registration,
+transfer and re-registration of released names. An owner may hold at most
+100 names (`TooManyNames`, code 10).
+
+## Upgrades
+
+`upgrade(wasm_hash)` lets the admin replace the contract code with an
+already-uploaded WASM. The contract ID and all stored names stay the same,
+so integrations keep pinning one contract ID.
+
 ## Semantics
 
 - Names are stored **without** the `.sid` suffix.

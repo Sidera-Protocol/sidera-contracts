@@ -12,6 +12,11 @@ not a hidden gap.
 
 ## Registry semantics
 
+- **The admin can upgrade the contract.** `upgrade` replaces the code while
+  keeping the contract ID and every name. This is a trust assumption: on
+  mainnet the admin should be a multisig or governance contract, and
+  upgrades should be announced in advance.
+
 - **Pricing is admin-controlled, without a timelock.** The admin can change
   yearly prices and the treasury address at any time (each change emits an
   event). Existing registrations keep their expiry; new prices apply to the
@@ -36,8 +41,9 @@ not a hidden gap.
 
 - **The SDK is not published to npm yet.** It lives in `packages/sdk` and the
   dashboard uses it through npm workspaces.
-- **No indexer.** There is no off-chain index of registrations; all reads
-  go through the contract.
+- **No off-chain indexer.** Each owner's names come from the registry itself
+  (`names_of`, at most 100 names per owner). Searching across all names, or
+  history, would need an indexer reading the contract's events.
 
 ## Process
 

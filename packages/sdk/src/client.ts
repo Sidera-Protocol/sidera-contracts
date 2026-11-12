@@ -35,6 +35,7 @@ import { assertValidName, normalizeName } from "./names.js";
 import { parseMemoHint } from "./memo.js";
 import type {
   ExpiryResult,
+  OwnedName,
   ParsedMemo,
   RegisterParams,
   RegistryConfig,
@@ -223,6 +224,19 @@ export class SideraClient {
       throw errorFromCode(1, name);
     }
     return secondsToDate(seconds);
+  }
+
+  /**
+   * The names `owner` holds (active or in their grace period), with their
+   * expiry, in registration order. Read straight from the registry.
+   */
+  async namesOf(owner: string): Promise<OwnedName[]> {
+    const listed = await this.callRead<Array<{ name: string; expires_at: bigint }> | null>(
+      "names_of",
+      [addressScVal(owner)],
+      owner,
+    );
+    return (listed ?? []).map((n) => ({ name: n.name, expiresAt: secondsToDate(n.expires_at) }));
   }
 
   /** Whether a name is valid and can be registered right now. Invalid names return `false`. */
@@ -575,14 +589,9 @@ function scValToJs(v: xdr.ScVal): unknown {
       return scValToBigInt(v);
     case "scvVoid":
       return null;
-    case "scvVec": {
-      // Option<T> decoding: 0 elements → null, 1 element → decoded value.
-      const vec = v.vec();
-      if (vec == null || vec.length === 0) {
-        return null;
-      }
-      return scValToJs(vec[0]!);
-    }
+    case "scvVec":
+      // A real Soroban Vec (Options are Void or the bare value, never a vec).
+      return (v.vec() ?? []).map((item) => scValToJs(item));
     case "scvMap": {
       const map = v.map();
       const out: Record<string, unknown> = {};

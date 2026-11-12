@@ -102,6 +102,14 @@ export interface ExpiryResult {
   expiresAt: Date;
 }
 
+/** A name an address holds, from `namesOf`. */
+export interface OwnedName {
+  /** Bare name, without the `.sid` suffix. */
+  name: string;
+  /** When the registration expires. */
+  expiresAt: Date;
+}
+
 /** Registry settings as stored on-chain. Prices are per year, in the token's smallest unit. */
 export interface RegistryConfig {
   admin: string;

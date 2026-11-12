@@ -31,6 +31,11 @@
 //! the successful calls, no token is created or lost, failed calls move no
 //! money, and no expiry ever exceeds `MAX_YEARS` from the time it was set.
 //!
+//! **P5 — Owner index consistency.** For random sequences of `register`,
+//! `transfer` and time jumps across several owners, `names_of(owner)` always
+//! lists exactly the names a mirror model says the owner holds (active or in
+//! grace), with the contract's own expiry, and never a released name.
+//!
 //! Runs are deterministic (fixed default seed); a failure prints its case
 //! for replay. Override the case count with
 //! `PROPTEST_CASES=n cargo test -p sidera-registry props`.
@@ -490,6 +495,86 @@ proptest! {
                 "treasury must hold exactly the quoted prices of successful calls");
             let held: i128 = payers.iter().map(|p| d.balance(&env, p)).sum();
             prop_assert_eq!(held + treasury, total_supply, "no token created or lost");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P5 — owner index consistency
+// ---------------------------------------------------------------------------
+
+/// (op: 0 register / 1 transfer, name index, actor index, target index, seconds to skip)
+type IndexStep = (u8, usize, usize, usize, u64);
+
+fn index_step() -> impl Strategy<Value = IndexStep> {
+    (
+        0u8..2,
+        0usize..5,
+        0usize..3,
+        0usize..3,
+        prop_oneof![
+            Just(0u64),
+            0u64..YEAR_SECONDS,
+            YEAR_SECONDS..(2 * YEAR_SECONDS)
+        ],
+    )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn p5_names_of_matches_who_holds_what(steps in prop::collection::vec(index_step(), 1..30)) {
+        let w = setup_world();
+        let c = w.client();
+        let owners: std::vec::Vec<Address> = (0..3).map(|_| Address::generate(&w.env)).collect();
+        let pool = ["alpha", "bravo", "charlie", "delta", "echo"];
+        // Mirror: name -> (owner index, expiry)
+        let mut model: std::collections::BTreeMap<usize, (usize, u64)> = std::collections::BTreeMap::new();
+
+        for (op, name_ix, actor, target, skip) in steps {
+            w.env.ledger().with_mut(|l| l.timestamp += skip);
+            let now = w.env.ledger().timestamp();
+            // Released names leave the model.
+            model.retain(|_, (_, exp)| now <= exp.saturating_add(GRACE_PERIOD_SECONDS));
+            let name = w.name(pool[name_ix]);
+
+            if op == 0 {
+                let result = c.try_register(&name, &owners[actor], &owners[actor], &None, &1);
+                let free = !model.contains_key(&name_ix);
+                prop_assert_eq!(result.is_ok(), free, "register succeeds exactly when the name is free");
+                if let Ok(Ok(exp)) = result {
+                    model.insert(name_ix, (actor, exp));
+                }
+            } else {
+                let result = c.try_transfer(&name, &owners[actor], &owners[target]);
+                let allowed = matches!(model.get(&name_ix), Some((o, exp)) if *o == actor && now <= *exp);
+                prop_assert_eq!(result.is_ok(), allowed, "only an active name's owner can transfer");
+                if allowed {
+                    model.get_mut(&name_ix).unwrap().0 = target;
+                }
+            }
+
+            for (o_ix, owner) in owners.iter().enumerate() {
+                let mut expected: std::vec::Vec<(std::string::String, u64)> = model
+                    .iter()
+                    .filter(|(_, (o, _))| *o == o_ix)
+                    .map(|(n, (_, exp))| (pool[*n].into(), *exp))
+                    .collect();
+                expected.sort();
+                let mut listed: std::vec::Vec<(std::string::String, u64)> = c
+                    .names_of(owner)
+                    .iter()
+                    .map(|n| {
+                        let mut buf = [0u8; 32];
+                        let len = n.name.len() as usize;
+                        n.name.copy_into_slice(&mut buf[..len]);
+                        (std::string::String::from_utf8(buf[..len].to_vec()).unwrap(), n.expires_at)
+                    })
+                    .collect();
+                listed.sort();
+                prop_assert_eq!(listed, expected, "names_of must match the model for every owner");
+            }
         }
     }
 }

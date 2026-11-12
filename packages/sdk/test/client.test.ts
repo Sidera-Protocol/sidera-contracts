@@ -283,6 +283,31 @@ describe("pricing and expiry reads", () => {
     });
   });
 
+  it("decodes every name from namesOf, not just the first", async () => {
+    const { client, server } = makeClient();
+    const sym = (k: string) => xdr.ScVal.scvSymbol(k);
+    const owned = (name: string, exp: bigint) =>
+      xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({ key: sym("expires_at"), val: xdr.ScVal.scvU64(new xdr.Uint64(exp)) }),
+        new xdr.ScMapEntry({ key: sym("name"), val: xdr.ScVal.scvString(name) }),
+      ]);
+    const simulate = server.simulateTransaction.mockResolvedValue({
+      result: { retval: xdr.ScVal.scvVec([owned("alpha", 1_800_000_000n), owned("bravo", 1_900_000_000n)]) },
+    });
+    await expect(client.namesOf(OWNER)).resolves.toEqual([
+      { name: "alpha", expiresAt: new Date(1_800_000_000_000) },
+      { name: "bravo", expiresAt: new Date(1_900_000_000_000) },
+    ]);
+    const hf = simulate.mock.calls[0][0].operations[0].func.value();
+    expect(hf.functionName().toString()).toBe("names_of");
+  });
+
+  it("returns an empty list for an owner with no names", async () => {
+    const { client, server } = makeClient();
+    server.simulateTransaction.mockResolvedValue({ result: { retval: xdr.ScVal.scvVec([]) } });
+    await expect(client.namesOf(OWNER)).resolves.toEqual([]);
+  });
+
   it("maps contract error #6 to NameExpiredError", async () => {
     const { client, server } = makeClient();
     server.simulateTransaction.mockResolvedValue({ error: "HostError: Error(Contract, #6)" });
