@@ -6,20 +6,34 @@ Sidera maps human-readable names to Stellar addresses (G- and M-keys) with
 **mandatory-capable memo hints**, so exchange payments stop getting lost and
 wallets stop asking users to paste 56 characters.
 
-## Why Stellar needs this
+## Why Sidera
 
-- Every mature chain converged on a name service (ENS, SNS, ANS). Stellar —
-  the payments chain — has none.
-- Stellar adds two failure modes Ethereum doesn't have: **memos** (required
-  by exchanges, lost = lost funds) and **muxed addresses**. Sidera treats the
-  memo hint as a first-class part of resolution.
+Stellar already has a general naming protocol, [Soroban Domains](https://sorobandomains.org)
+(`alice.xlm`). Sidera is narrower: it is built around one problem, **paying
+the right account with the right memo**, and makes the memo part of every
+resolution.
+
+- Exchanges and custodians on Stellar receive deposits on one shared account
+  and tell customers apart by **memo**. Send without it and the funds are
+  stuck or lost. Sidera stores the memo the destination requires as part of
+  the name, so `alice.sid` resolves to *address + memo* in one call.
+- **Muxed (M-) addresses** resolve the same way, so wallets never have to ask
+  users for a 56-character key and a memo separately.
+- The [resolver interface](docs/resolver-interface.md) defines exactly how a
+  wallet must use the result: when a name carries a memo, attach it or stop
+  and warn the user, never send without it. Integrations behave the same
+  everywhere.
 
 ## Status
 
-Current MVP: `register` / `resolve` / `set_address` / `transfer` /
-`owner_of` plus reverse resolution through `primary_name` and
-`set_primary_name`, with TTL-extend-on-write so long-held names never archive.
-Next tranches: pricing & renewals, subnames, and broader SDK/indexer tooling.
+| Part | What works today |
+|---|---|
+| Registry contract (`contracts/registry`) | `register`, `resolve`, `set_address`, `transfer`, `owner_of`, `exists`, `total_names`, reverse resolution (`primary_name`, `set_primary_name`), TTL extension on write. Deployed on testnet. |
+| TypeScript SDK (`packages/sdk`) | Forward and reverse resolution, registration and updates through the contract, Protocol 23 RPC decoding. |
+| Dashboard (`apps/dashboard`) | Search, resolve and claim `.sid` names with Freighter; set a primary name. |
+
+Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): pricing and
+renewals, subnames, expiry queries, an indexer, and an independent audit.
 
 ## Documentation
 
@@ -28,6 +42,8 @@ Next tranches: pricing & renewals, subnames, and broader SDK/indexer tooling.
 | [Project documentation hub](docs/README.md) | Repository map, deployment status, integration flow, and contributor starting points |
 | [Resolver interface](docs/resolver-interface.md) | The contract every Sidera-compatible wallet and payment app codes against: `Resolution` shape, wallet memo rules, and reverse resolution |
 | [Integration guide](docs/INTEGRATION.md) | How to integrate resolution into a wallet or payment app: the four rules, memo handling, and code snippets |
+| [SDK API reference](packages/sdk/docs/API.md) | Every SDK method and type |
+| [Dashboard troubleshooting](apps/dashboard/docs/TROUBLESHOOTING.md) | Wallet, network and RPC problems when running the dashboard |
 | [Changelog](CHANGELOG.md) | Notable changes per release (Keep a Changelog format) |
 | [Known limitations](docs/KNOWN-LIMITATIONS.md) | Exactly what Sidera does and does not do yet |
 | [Security policy](SECURITY.md) | Deployment status, vulnerability reporting, and scope notes |
@@ -37,10 +53,16 @@ Next tranches: pricing & renewals, subnames, and broader SDK/indexer tooling.
 ## Repository layout
 
 ```
-contracts/registry   # Soroban name registry (Rust, no_std, SDK 27.x)
-docs/                # Protocol docs and the resolver interface spec
-../sidera-sdk        # TypeScript resolution SDK (separate repository)
+contracts/registry   # Soroban name registry (Rust, no_std, soroban-sdk 27)
+packages/sdk         # TypeScript SDK: @sidera-protocol/sdk
+apps/dashboard       # Next.js dashboard for searching, resolving and claiming names
+docs/                # Protocol docs, resolver interface, integration guide
 ```
+
+The SDK, dashboard and contracts used to live in three repositories
+(`sidera-sdk`, `sidera-app`, `sidera-contracts`). They now share one
+repository, history included, so a contract change, its SDK support and its
+dashboard screen land in the same pull request.
 
 ## Testnet deployment proof
 
@@ -60,6 +82,8 @@ Explorer: <https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4D
 
 ## Development
 
+Contracts (Rust):
+
 ```bash
 rustup target add wasm32v1-none
 
@@ -73,9 +97,18 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 scripts/provenance.sh build
 ```
 
-CI enforces: **Rustfmt · lockfile check · Clippy (`-D warnings`) · Test ·
-Docs · WASM size budget · Security Audit · Dependency Policy ·
-Provenance** — all with `--locked` for reproducible builds.
+SDK and dashboard (Node 20+, npm workspaces):
+
+```bash
+npm ci --ignore-scripts
+npm test                                  # SDK tests
+npm run build                             # SDK, then the dashboard that uses it
+npm run dev -w @sidera-protocol/app       # dashboard on http://localhost:3000
+```
+
+CI enforces: **Repo hygiene · Rustfmt · lockfile check · Clippy (`-D warnings`) ·
+Test · Docs · WASM size budget · SDK typecheck, tests and build · Dashboard
+typecheck and build · Security Audit · Dependency Policy · Provenance**.
 
 ## Contributing
 
@@ -85,4 +118,4 @@ acceptance criteria and verification commands.
 
 ## License
 
-MIT OR Apache-2.0
+MIT. See [LICENSE](LICENSE).

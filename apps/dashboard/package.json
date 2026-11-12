@@ -2,7 +2,7 @@
   "name": "@sidera-protocol/app",
   "version": "0.1.0",
   "private": true,
-  "description": "Sidera dashboard — resolve, search, and register .sid names on Stellar",
+  "description": "Sidera dashboard \u2014 resolve, search, and register .sid names on Stellar",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@sidera-protocol/sdk": "file:vendor/sidera-protocol-sdk-0.1.0.tgz",
+    "@sidera-protocol/sdk": "0.1.0",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^14.6.1",
     "lucide-react": "^0.474.0",

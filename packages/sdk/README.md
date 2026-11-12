@@ -13,7 +13,7 @@ wallets (Freighter, Albedo, …) and payment apps.
 
 ## Project documentation
 
-See the [Sidera documentation hub](https://github.com/Sidera-Protocol/sidera-contracts/blob/main/docs/README.md)
+See the [Sidera documentation hub](../../docs/README.md)
 for the repository map, current testnet deployment, integration flow, and
 cross-repository contribution guidance. See the [API reference](docs/API.md)
 for the exported client methods, types, and errors.

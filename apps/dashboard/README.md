@@ -3,7 +3,7 @@
 **The web frontend for the Sidera Stellar Name Service — search, resolve,
 and claim `.sid` names.**
 
-See the [Sidera documentation hub](https://github.com/Sidera-Protocol/sidera-contracts/blob/main/docs/README.md)
+See the [Sidera documentation hub](../../docs/README.md)
 for the repository map, current testnet deployment, integration flow, and
 cross-repository contribution guidance. See the
 [troubleshooting guide](docs/TROUBLESHOOTING.md) for configuration, wallet,
@@ -45,17 +45,16 @@ npm run dev            # http://localhost:3000
 ```
 
 The configured testnet contract includes forward and reverse resolution. The
-`@sidera-protocol/sdk` dependency is vendored as a tarball
-(`vendor/`), so fresh clones install standalone — no sibling checkout
-of the SDK repo required. Once the SDK is on npm, this switches to a
-regular version pin.
+dashboard uses `@sidera-protocol/sdk` straight from `packages/sdk` through npm
+workspaces: run `npm ci` at the repository root, and `npm run build` builds the
+SDK before the dashboard.
 
 ## Suite
 
 | Repo | Layer |
 |---|---|
-| [sidera-contracts](https://github.com/Sidera-Protocol/sidera-contracts) | Soroban registry (deployed on testnet) |
-| [sidera-sdk](https://github.com/Sidera-Protocol/sidera-sdk) | TypeScript client |
+| [`contracts/registry`](../../contracts/registry) | Soroban registry (deployed on testnet) |
+| [`packages/sdk`](../../packages/sdk) | TypeScript client |
 | **sidera-app** | This dashboard |
 
 ## License
