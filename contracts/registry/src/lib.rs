@@ -3,20 +3,31 @@
 //! Maps human-readable names (`alice.sid`) to Stellar addresses with
 //! memo hints, so payments never go to the wrong place.
 //!
-//! This is the Day-1 MVP slice: registration, ownership, address updates,
-//! ownership transfer, and resolution with memo hints. Pricing/renewals and
-//! subnames follow in later tranches.
+//! Names are **rented by the year** and paid for in a SEP-41 token (for
+//! example XLM or USDC through its Stellar Asset Contract). The price per
+//! year depends on the name's length. A name stops resolving when it
+//! expires; for a grace period afterwards only renewal is possible, and
+//! after that anyone may register it again.
 //!
 //! Authorization model:
-//! - `register` requires the registering owner.
-//! - `set_address` and `transfer` require the current owner.
-//! - `resolve`, `exists`, `owner_of`, and `total_names` are read-only.
+//! - `register` requires the registering owner, who also pays.
+//! - `renew` requires the payer (anyone may renew a name).
+//! - `set_address` and `transfer` require the current owner of an active name.
+//! - `set_primary_name` requires the address, which must be the owner of the
+//!   name *and* the address the name resolves to.
+//! - `set_prices`, `set_treasury` and `set_admin` require the admin.
+//! - `resolve`, `exists`, `owner_of`, `expires_at`, `is_available`, `price`,
+//!   `config` and `total_names` are read-only.
 //!
 //! Events (topics: event symbol + name; data in parentheses):
-//! - `registered(name)` — `(owner, address, memo)` — a name was registered.
+//! - `registered(name)` — `(owner, address, memo, expires_at)` — a name was registered.
+//! - `renewed(name)` — `(payer, years, expires_at, amount)` — a name was renewed.
 //! - `address_set(name)` — `(caller, address, memo)` — the payment record changed.
 //! - `transferred(name)` — `(caller, new_owner)` — ownership moved.
 //! - `primary_name_set(address)` — `(address, name)` — an address set a display name.
+//! - `prices_set()` — `(three, four, five_plus)` — the admin changed prices.
+//! - `treasury_set()` — `(treasury)` — the admin changed the treasury.
+//! - `admin_set()` — `(admin)` — the admin role moved.
 #![no_std]
 // Soroban `#[contractimpl]` entrypoints take parameters **by value**: the SDK
 // macro derives the contract ABI from the exported signature, so `&Env` or
@@ -28,7 +39,8 @@
 extern crate std;
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, String,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
+    token::TokenClient, Address, Env, String,
 };
 
 /// Errors for the Sidera registry.
@@ -45,6 +57,15 @@ pub enum RegistryError {
     Unauthorized = 4,
     /// An arithmetic operation overflowed.
     ArithmeticOverflow = 5,
+    /// The name has expired: it no longer resolves and can only be renewed
+    /// (during the grace period).
+    NameExpired = 6,
+    /// `years` must be between 1 and [`MAX_YEARS`].
+    InvalidYears = 7,
+    /// Prices must not be negative.
+    InvalidPrice = 8,
+    /// A renewal may not push the expiry more than [`MAX_YEARS`] ahead.
+    PeriodTooLong = 9,
 }
 
 /// A resolved payment destination: the address plus an optional memo hint.
@@ -75,6 +96,81 @@ pub struct Registered {
     pub address: Address,
     /// The initial memo hint.
     pub memo: Option<String>,
+    /// When the registration expires (ledger timestamp, seconds).
+    pub expires_at: u64,
+}
+
+/// Emitted when a name is renewed. Topics: `("renewed", name)`;
+/// data (in order): `payer`, `years`, `expires_at`, `amount`.
+#[contractevent(topics = ["renewed"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Renewed {
+    /// The renewed name.
+    #[topic]
+    pub name: String,
+    /// Who paid for the renewal.
+    pub payer: Address,
+    /// Years added.
+    pub years: u32,
+    /// The new expiry (ledger timestamp, seconds).
+    pub expires_at: u64,
+    /// Amount paid, in the payment token's smallest unit.
+    pub amount: i128,
+}
+
+/// Emitted when the admin changes prices. Data: `three`, `four`, `five_plus`.
+#[contractevent(topics = ["prices_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PricesSet {
+    /// Yearly price of a 3-character name.
+    pub three: i128,
+    /// Yearly price of a 4-character name.
+    pub four: i128,
+    /// Yearly price of a name of 5 characters or more.
+    pub five_plus: i128,
+}
+
+/// Emitted when the admin changes the treasury. Data: `treasury`.
+#[contractevent(topics = ["treasury_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TreasurySet {
+    /// The new treasury that receives payments.
+    pub treasury: Address,
+}
+
+/// Emitted when the admin role moves. Data: `admin`.
+#[contractevent(topics = ["admin_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminSet {
+    /// The new admin.
+    pub admin: Address,
+}
+
+/// Yearly prices by name length, in the payment token's smallest unit
+/// (stroops for XLM). A price of 0 makes that length free.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Prices {
+    /// 3-character names.
+    pub three: i128,
+    /// 4-character names.
+    pub four: i128,
+    /// Names of 5 characters or more.
+    pub five_plus: i128,
+}
+
+/// Registry settings, fixed at deployment and changeable by the admin.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Config {
+    /// May change prices, treasury and admin.
+    pub admin: Address,
+    /// SEP-41 token used for payment.
+    pub token: Address,
+    /// Receives every payment.
+    pub treasury: Address,
+    /// Yearly prices by name length.
+    pub prices: Prices,
 }
 
 /// Emitted when a name's payment record changes. Topics:
@@ -117,8 +213,33 @@ enum DataKey {
     Owner(String),
     /// The preferred display name for `Address`.
     PrimaryName(Address),
-    /// Monotonic registration counter (hot, small, instance storage).
+    /// Monotonic counter of distinct names ever registered (instance storage).
     Count,
+    /// When `String` name expires (ledger timestamp, seconds).
+    Expiry(String),
+    /// Registry settings (instance storage).
+    Config,
+}
+
+/// Seconds in a (365-day) registration year.
+pub const YEAR_SECONDS: u64 = 31_536_000;
+/// Longest registration or renewal horizon, in years.
+pub const MAX_YEARS: u32 = 10;
+/// After expiry, only renewal is possible for this long (30 days); after it
+/// the name is released and anyone may register it.
+pub const GRACE_PERIOD_SECONDS: u64 = 2_592_000;
+
+/// Where a name is in its life cycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Status {
+    /// Never registered.
+    Missing,
+    /// Registered and resolving, until `expiry`.
+    Active(u64),
+    /// Expired but still reserved for renewal by anyone.
+    Grace(u64),
+    /// Past the grace period: free to register again.
+    Released,
 }
 
 /// TTL management: bump the lifetime of every name record on write and on
@@ -157,82 +278,174 @@ pub struct SideraRegistry;
 
 #[contractimpl]
 impl SideraRegistry {
-    /// Register `name` (without the `.sid` suffix), owned by `owner`, and
-    /// attach the initial address record. Returns the canonical stored name.
+    /// Set up the registry. Runs once, atomically with deployment, so no one
+    /// can take the admin role in between.
     ///
-    /// First-come-first-served: registration fails with
-    /// [`RegistryError::NameTaken`] if the name is already owned.
+    /// # Panics
+    ///
+    /// With [`RegistryError::InvalidPrice`] if any price is negative.
+    pub fn __constructor(
+        env: Env,
+        admin: Address,
+        token: Address,
+        treasury: Address,
+        prices: Prices,
+    ) {
+        if Self::prices_invalid(&prices) {
+            panic_with_error!(&env, RegistryError::InvalidPrice);
+        }
+        let config = Config {
+            admin,
+            token,
+            treasury,
+            prices,
+        };
+        env.storage().instance().set(&DataKey::Config, &config);
+        Self::bump_instance(&env);
+    }
+
+    /// Register `name` (without the `.sid` suffix) for `years` years, owned
+    /// by `owner`, with its initial payment record. `owner` pays
+    /// [`SideraRegistry::price`] to the treasury. Returns the expiry
+    /// (ledger timestamp, seconds).
+    ///
+    /// A name is available if it was never registered or if its grace
+    /// period has ended.
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NameTaken`] — the name is already registered.
     /// * [`RegistryError::InvalidName`] — the name failed validation.
-    /// * [`RegistryError::ArithmeticOverflow`] — the registration counter
-    ///   overflowed.
+    /// * [`RegistryError::InvalidYears`] — `years` is 0 or above [`MAX_YEARS`].
+    /// * [`RegistryError::NameTaken`] — the name is active or in its grace period.
+    /// * [`RegistryError::ArithmeticOverflow`] — a price or time overflowed.
     pub fn register(
         env: Env,
         name: String,
         owner: Address,
         address: Address,
         memo: Option<String>,
-    ) -> Result<String, RegistryError> {
+        years: u32,
+    ) -> Result<u64, RegistryError> {
         Self::validate_name(&name)?;
+        Self::validate_years(years)?;
         owner.require_auth();
 
-        let key = DataKey::Name(name.clone());
-        if env.storage().persistent().has(&key) {
-            return Err(RegistryError::NameTaken);
-        }
+        let fresh = match Self::status(&env, &name) {
+            Status::Missing => true,
+            Status::Released => false,
+            Status::Active(_) | Status::Grace(_) => return Err(RegistryError::NameTaken),
+        };
+
+        let amount = Self::quote(&env, &name, years)?;
+        let expires_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(Self::period(years)?)
+            .ok_or(RegistryError::ArithmeticOverflow)?;
+        // Take payment first: if the transfer fails, the whole call fails and
+        // nothing below is written.
+        Self::collect(&env, &owner, amount);
 
         let record = Resolution { address, memo };
-        env.storage().persistent().set(&key, &record);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Owner(name.clone()), &owner);
+        let storage = env.storage().persistent();
+        storage.set(&DataKey::Name(name.clone()), &record);
+        storage.set(&DataKey::Owner(name.clone()), &owner);
+        storage.set(&DataKey::Expiry(name.clone()), &expires_at);
+        Self::bump_name(&env, &name);
 
-        // Both keys share the name's lifetime; extend them together.
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Owner(name.clone()),
-            TTL_THRESHOLD_LEDGERS,
-            TTL_EXTEND_TO_LEDGERS,
-        );
-
-        let count: u64 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
-        let next = count
-            .checked_add(1)
-            .ok_or(RegistryError::ArithmeticOverflow)?;
-        env.storage().instance().set(&DataKey::Count, &next);
+        if fresh {
+            let count: u64 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
+            let next = count
+                .checked_add(1)
+                .ok_or(RegistryError::ArithmeticOverflow)?;
+            env.storage().instance().set(&DataKey::Count, &next);
+        }
+        Self::bump_instance(&env);
 
         Registered {
-            name: name.clone(),
+            name,
             owner,
-            address: record.address.clone(),
-            memo: record.memo.clone(),
+            address: record.address,
+            memo: record.memo,
+            expires_at,
         }
         .publish(&env);
 
-        Ok(name)
+        Ok(expires_at)
     }
 
-    /// Set the preferred display name for `address`. Owner-only.
+    /// Extend `name` by `years` years, paid by `payer` (anyone may renew).
+    /// Works while the name is active and during its grace period. Returns
+    /// the new expiry.
     ///
-    /// The registry stores `name` **without** the `.sid` suffix; wallets
-    /// should append it when displaying the result of `primary_name`.
+    /// # Errors
     ///
-    /// Setting a primary name does not create or modify a forward name
-    /// registration: any address owner can set a display name for its own
-    /// address.
+    /// * [`RegistryError::InvalidYears`] — `years` is 0 or above [`MAX_YEARS`].
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
+    /// * [`RegistryError::PeriodTooLong`] — the new expiry would be more than
+    ///   [`MAX_YEARS`] years from now.
+    /// * [`RegistryError::ArithmeticOverflow`] — a price or time overflowed.
+    pub fn renew(env: Env, name: String, payer: Address, years: u32) -> Result<u64, RegistryError> {
+        Self::validate_years(years)?;
+        payer.require_auth();
+
+        let expiry = match Self::status(&env, &name) {
+            Status::Active(expiry) | Status::Grace(expiry) => expiry,
+            Status::Missing | Status::Released => return Err(RegistryError::NotFound),
+        };
+        let expires_at = expiry
+            .checked_add(Self::period(years)?)
+            .ok_or(RegistryError::ArithmeticOverflow)?;
+        let horizon = env
+            .ledger()
+            .timestamp()
+            .checked_add(Self::period(MAX_YEARS)?)
+            .ok_or(RegistryError::ArithmeticOverflow)?;
+        if expires_at > horizon {
+            return Err(RegistryError::PeriodTooLong);
+        }
+
+        let amount = Self::quote(&env, &name, years)?;
+        Self::collect(&env, &payer, amount);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Expiry(name.clone()), &expires_at);
+        Self::bump_name(&env, &name);
+        Self::bump_instance(&env);
+
+        Renewed {
+            name,
+            payer,
+            years,
+            expires_at,
+            amount,
+        }
+        .publish(&env);
+
+        Ok(expires_at)
+    }
+
+    /// Set the preferred display name for `address`.
+    ///
+    /// The name must be active, owned by `address`, and resolve to
+    /// `address`, so no one can display a name that does not point to them.
+    /// The registry stores `name` **without** the `.sid` suffix.
     ///
     /// # Errors
     ///
     /// * [`RegistryError::InvalidName`] — `name` failed validation.
-    /// * [`RegistryError::Unauthorized`] — `address` did not authorize the write.
+    /// * [`RegistryError::NotFound`] — `name` is not registered.
+    /// * [`RegistryError::NameExpired`] — `name` has expired.
+    /// * [`RegistryError::Unauthorized`] — `address` does not own `name`, or
+    ///   `name` does not resolve to `address`.
     pub fn set_primary_name(env: Env, address: Address, name: String) -> Result<(), RegistryError> {
         address.require_auth();
         Self::validate_name(&name)?;
+        Self::require_active(&env, &name)?;
+        if !Self::points_to(&env, &name, &address) {
+            return Err(RegistryError::Unauthorized);
+        }
 
         let key = DataKey::PrimaryName(address.clone());
         let record = PrimaryNameRecord { name: name.clone() };
@@ -241,25 +454,19 @@ impl SideraRegistry {
             .persistent()
             .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
 
-        PrimaryNameSet {
-            address: address.clone(),
-            name: name.clone(),
-        }
-        .publish(&env);
+        PrimaryNameSet { address, name }.publish(&env);
 
         Ok(())
     }
 
-    /// Return the preferred display name for `address`, if one has been set.
-    ///
-    /// Returns [`RegistryError::NotFound`] when `address` has no primary name.
-    ///
-    /// Read-only but TTL-aware: looking up a primary name bumps its entry so a
-    /// frequently referenced address does not lose its display name.
+    /// Return the preferred display name for `address`, if one has been set
+    /// **and is still valid**: the name is active, owned by `address`, and
+    /// resolves to `address`. A primary name that stopped matching (expired,
+    /// transferred or repointed) is not returned.
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NotFound`] — `address` has no primary name.
+    /// * [`RegistryError::NotFound`] — `address` has no valid primary name.
     pub fn primary_name(env: Env, address: Address) -> Result<String, RegistryError> {
         let key = DataKey::PrimaryName(address.clone());
         let record: PrimaryNameRecord = env
@@ -267,6 +474,11 @@ impl SideraRegistry {
             .persistent()
             .get(&key)
             .ok_or(RegistryError::NotFound)?;
+        let valid = matches!(Self::status(&env, &record.name), Status::Active(_))
+            && Self::points_to(&env, &record.name, &address);
+        if !valid {
+            return Err(RegistryError::NotFound);
+        }
         env.storage()
             .persistent()
             .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
@@ -275,35 +487,32 @@ impl SideraRegistry {
 
     /// Resolve `name` to its payment destination (address + memo hint).
     ///
-    /// Read-only but TTL-aware: resolving a name bumps its entry so a
+    /// Read-only but TTL-aware: resolving a name bumps its entries so a
     /// popular name never archives.
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NotFound`] — the name is not registered.
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
+    /// * [`RegistryError::NameExpired`] — the name has expired. Wallets must
+    ///   not send to an expired name.
     pub fn resolve(env: Env, name: String) -> Result<Resolution, RegistryError> {
-        let key = DataKey::Name(name.clone());
+        Self::require_active(&env, &name)?;
         let record: Resolution = env
             .storage()
             .persistent()
-            .get(&key)
+            .get(&DataKey::Name(name.clone()))
             .ok_or(RegistryError::NotFound)?;
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Owner(name),
-            TTL_THRESHOLD_LEDGERS,
-            TTL_EXTEND_TO_LEDGERS,
-        );
+        Self::touch_name(&env, &name);
         Ok(record)
     }
 
-    /// Update the address and/or memo attached to `name`. Owner-only.
+    /// Update the address and/or memo attached to `name`. Owner-only, and
+    /// only while the name is active.
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NotFound`] — the name is not registered.
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
+    /// * [`RegistryError::NameExpired`] — the name has expired.
     /// * [`RegistryError::Unauthorized`] — `caller` is not the owner.
     pub fn set_address(
         env: Env,
@@ -313,6 +522,7 @@ impl SideraRegistry {
         memo: Option<String>,
     ) -> Result<(), RegistryError> {
         caller.require_auth();
+        Self::require_active(&env, &name)?;
         Self::require_owner(&env, &name, &caller)?;
 
         let record = Resolution { address, memo };
@@ -324,15 +534,15 @@ impl SideraRegistry {
         }
         .publish(&env);
 
-        let key = DataKey::Name(name);
-        env.storage().persistent().set(&key, &record);
         env.storage()
             .persistent()
-            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+            .set(&DataKey::Name(name.clone()), &record);
+        Self::touch_name(&env, &name);
         Ok(())
     }
 
-    /// Transfer ownership of `name` to `new_owner`. Owner-only.
+    /// Transfer ownership of `name` to `new_owner`. Owner-only, and only
+    /// while the name is active. The expiry does not change.
     ///
     /// The transfer is unilateral (the recipient's acceptance is not
     /// required), matching DNS/ENS convention. The new owner proves control
@@ -340,7 +550,8 @@ impl SideraRegistry {
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NotFound`] — the name is not registered.
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
+    /// * [`RegistryError::NameExpired`] — the name has expired.
     /// * [`RegistryError::Unauthorized`] — `caller` is not the owner.
     pub fn transfer(
         env: Env,
@@ -349,6 +560,7 @@ impl SideraRegistry {
         new_owner: Address,
     ) -> Result<(), RegistryError> {
         caller.require_auth();
+        Self::require_active(&env, &name)?;
         Self::require_owner(&env, &name, &caller)?;
 
         OwnershipTransferred {
@@ -358,38 +570,164 @@ impl SideraRegistry {
         }
         .publish(&env);
 
-        let owner_key = DataKey::Owner(name);
-        env.storage().persistent().set(&owner_key, &new_owner);
-        env.storage().persistent().extend_ttl(
-            &owner_key,
-            TTL_THRESHOLD_LEDGERS,
-            TTL_EXTEND_TO_LEDGERS,
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Owner(name.clone()), &new_owner);
+        Self::touch_name(&env, &name);
         Ok(())
     }
 
-    /// The current owner of `name` (read-only view).
+    /// The current owner of `name`, while it is active or in its grace period.
     ///
     /// # Errors
     ///
-    /// * [`RegistryError::NotFound`] — the name is not registered.
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
     pub fn owner_of(env: Env, name: String) -> Result<Address, RegistryError> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Owner(name))
-            .ok_or(RegistryError::NotFound)
+        match Self::status(&env, &name) {
+            Status::Active(_) | Status::Grace(_) => env
+                .storage()
+                .persistent()
+                .get(&DataKey::Owner(name))
+                .ok_or(RegistryError::NotFound),
+            Status::Missing | Status::Released => Err(RegistryError::NotFound),
+        }
     }
 
-    /// Whether `name` is registered (no TTL side effects).
+    /// When `name` expires (ledger timestamp, seconds), while it is active or
+    /// in its grace period.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
+    pub fn expires_at(env: Env, name: String) -> Result<u64, RegistryError> {
+        match Self::status(&env, &name) {
+            Status::Active(expiry) | Status::Grace(expiry) => Ok(expiry),
+            Status::Missing | Status::Released => Err(RegistryError::NotFound),
+        }
+    }
+
+    /// Whether `name` is taken: active or in its grace period (no TTL side effects).
     #[must_use]
     pub fn exists(env: Env, name: String) -> bool {
-        env.storage().persistent().has(&DataKey::Name(name))
+        matches!(
+            Self::status(&env, &name),
+            Status::Active(_) | Status::Grace(_)
+        )
     }
 
-    /// Total registered names (hot counter).
+    /// Whether `name` is valid and can be registered now.
+    #[must_use]
+    pub fn is_available(env: Env, name: String) -> bool {
+        Self::validate_name(&name).is_ok()
+            && matches!(
+                Self::status(&env, &name),
+                Status::Missing | Status::Released
+            )
+    }
+
+    /// What registering or renewing `name` for `years` years costs, in the
+    /// payment token's smallest unit.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::InvalidName`] — the name failed validation.
+    /// * [`RegistryError::InvalidYears`] — `years` is 0 or above [`MAX_YEARS`].
+    /// * [`RegistryError::ArithmeticOverflow`] — the price overflowed.
+    pub fn price(env: Env, name: String, years: u32) -> Result<i128, RegistryError> {
+        Self::validate_name(&name)?;
+        Self::validate_years(years)?;
+        Self::quote(&env, &name, years)
+    }
+
+    /// The registry settings: admin, payment token, treasury and prices.
+    #[must_use]
+    pub fn config(env: Env) -> Config {
+        Self::load_config(&env)
+    }
+
+    /// Change yearly prices. Admin-only. Existing registrations keep their expiry.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::InvalidPrice`] — a price is negative.
+    pub fn set_prices(env: Env, prices: Prices) -> Result<(), RegistryError> {
+        let mut config = Self::load_config(&env);
+        config.admin.require_auth();
+        if Self::prices_invalid(&prices) {
+            return Err(RegistryError::InvalidPrice);
+        }
+        PricesSet {
+            three: prices.three,
+            four: prices.four,
+            five_plus: prices.five_plus,
+        }
+        .publish(&env);
+        config.prices = prices;
+        Self::save_config(&env, &config);
+        Ok(())
+    }
+
+    /// Change the address that receives payments. Admin-only.
+    pub fn set_treasury(env: Env, treasury: Address) {
+        let mut config = Self::load_config(&env);
+        config.admin.require_auth();
+        TreasurySet {
+            treasury: treasury.clone(),
+        }
+        .publish(&env);
+        config.treasury = treasury;
+        Self::save_config(&env, &config);
+    }
+
+    /// Hand the admin role to `new_admin`. Both the current and the new
+    /// admin must sign, so the role cannot be sent to a mistyped address.
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let mut config = Self::load_config(&env);
+        config.admin.require_auth();
+        new_admin.require_auth();
+        AdminSet {
+            admin: new_admin.clone(),
+        }
+        .publish(&env);
+        config.admin = new_admin;
+        Self::save_config(&env, &config);
+    }
+
+    /// Number of distinct names ever registered. Re-registering a released
+    /// name does not count again.
     #[must_use]
     pub fn total_names(env: Env) -> u64 {
         env.storage().instance().get(&DataKey::Count).unwrap_or(0)
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /// Where `name` is in its life cycle, from its stored expiry.
+    fn status(env: &Env, name: &String) -> Status {
+        let expiry: Option<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Expiry(name.clone()));
+        let Some(expiry) = expiry else {
+            return Status::Missing;
+        };
+        let now = env.ledger().timestamp();
+        if now <= expiry {
+            Status::Active(expiry)
+        } else if now <= expiry.saturating_add(GRACE_PERIOD_SECONDS) {
+            Status::Grace(expiry)
+        } else {
+            Status::Released
+        }
+    }
+
+    /// Fail unless `name` is active.
+    fn require_active(env: &Env, name: &String) -> Result<(), RegistryError> {
+        match Self::status(env, name) {
+            Status::Active(_) => Ok(()),
+            Status::Grace(_) => Err(RegistryError::NameExpired),
+            Status::Missing | Status::Released => Err(RegistryError::NotFound),
+        }
     }
 
     /// Require that `caller` owns `name`.
@@ -403,6 +741,100 @@ impl SideraRegistry {
             return Err(RegistryError::Unauthorized);
         }
         Ok(())
+    }
+
+    /// Whether `address` both owns `name` and is where `name` resolves.
+    fn points_to(env: &Env, name: &String, address: &Address) -> bool {
+        let storage = env.storage().persistent();
+        let owner: Option<Address> = storage.get(&DataKey::Owner(name.clone()));
+        let record: Option<Resolution> = storage.get(&DataKey::Name(name.clone()));
+        owner.as_ref() == Some(address) && record.is_some_and(|r| &r.address == address)
+    }
+
+    /// Price of `years` years of `name`, without validation.
+    fn quote(env: &Env, name: &String, years: u32) -> Result<i128, RegistryError> {
+        let prices = Self::load_config(env).prices;
+        let per_year = match name.len() {
+            3 => prices.three,
+            4 => prices.four,
+            _ => prices.five_plus,
+        };
+        per_year
+            .checked_mul(i128::from(years))
+            .ok_or(RegistryError::ArithmeticOverflow)
+    }
+
+    /// Move `amount` of the payment token from `from` to the treasury.
+    /// Free names (amount 0) skip the token call.
+    fn collect(env: &Env, from: &Address, amount: i128) {
+        if amount > 0 {
+            let config = Self::load_config(env);
+            TokenClient::new(env, &config.token).transfer(from, &config.treasury, &amount);
+        }
+    }
+
+    /// `years` years in seconds.
+    fn period(years: u32) -> Result<u64, RegistryError> {
+        u64::from(years)
+            .checked_mul(YEAR_SECONDS)
+            .ok_or(RegistryError::ArithmeticOverflow)
+    }
+
+    fn validate_years(years: u32) -> Result<(), RegistryError> {
+        if (1..=MAX_YEARS).contains(&years) {
+            Ok(())
+        } else {
+            Err(RegistryError::InvalidYears)
+        }
+    }
+
+    fn prices_invalid(prices: &Prices) -> bool {
+        prices.three < 0 || prices.four < 0 || prices.five_plus < 0
+    }
+
+    fn load_config(env: &Env) -> Config {
+        env.storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(env, RegistryError::NotFound))
+    }
+
+    fn save_config(env: &Env, config: &Config) {
+        env.storage().instance().set(&DataKey::Config, config);
+        Self::bump_instance(env);
+    }
+
+    /// After a paid write (register/renew): keep the name's entries alive as
+    /// long as the network allows, since the owner paid for years.
+    fn bump_name(env: &Env, name: &String) {
+        let max = env.storage().max_ttl();
+        let storage = env.storage().persistent();
+        for key in [
+            DataKey::Name(name.clone()),
+            DataKey::Owner(name.clone()),
+            DataKey::Expiry(name.clone()),
+        ] {
+            storage.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, max);
+        }
+    }
+
+    /// On reads and owner updates: the usual 30-day bump for all three entries.
+    fn touch_name(env: &Env, name: &String) {
+        let storage = env.storage().persistent();
+        for key in [
+            DataKey::Name(name.clone()),
+            DataKey::Owner(name.clone()),
+            DataKey::Expiry(name.clone()),
+        ] {
+            storage.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+        }
+    }
+
+    fn bump_instance(env: &Env) {
+        let max = env.storage().max_ttl();
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD_LEDGERS, max);
     }
 
     /// Validate a bare name (no `.sid` suffix): 3–32 chars of a–z, 0–9, or
@@ -425,7 +857,13 @@ impl SideraRegistry {
 }
 
 #[cfg(test)]
+mod testutil;
+
+#[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod pricing_tests;
 
 #[cfg(test)]
 mod props;

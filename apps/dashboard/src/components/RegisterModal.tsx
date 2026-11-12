@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, ShieldCheck, X, AlertTriangle, Sparkles } from "lucide-react";
-import { DEMO_MODE, rememberRegistration } from "@/lib/sidera";
+import { DEMO_MODE, quotePrice, registerName } from "@/lib/sidera";
 import { useWallet } from "@/lib/useWallet";
 
 export interface RegisterTarget {
@@ -10,11 +10,14 @@ export interface RegisterTarget {
   fullName: string;
 }
 
+const YEAR_OPTIONS = [1, 2, 3, 5, 10];
+
 /**
- * Claim/register flow. Wire-up contract:
- *  - demo mode (no contract ID): simulated success after a short delay
- *  - live mode: builds the SDK `register` call and signs through the
- *    connected Freighter wallet via the SDK's signer interface
+ * Claim/register flow.
+ *  - demo mode (no contract ID): simulated, no transaction is sent
+ *  - live mode: the SDK prepares the `register` call (the owner pays the
+ *    quoted price), Freighter signs it, and the SDK submits it and waits for
+ *    the network to confirm before reporting success
  */
 export default function RegisterModal({
   target,
@@ -26,8 +29,22 @@ export default function RegisterModal({
   onRegistered: (name: string) => void;
 }) {
   const wallet = useWallet();
-  const [step, setStep] = useState<"idle" | "signing" | "submitting" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "signing" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [years, setYears] = useState(1);
+  const [price, setPrice] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPrice(null);
+    quotePrice(target.name, years)
+      .then((q) => !cancelled && setPrice(q.display))
+      .catch(() => !cancelled && setPrice("unavailable"));
+    return () => {
+      cancelled = true;
+    };
+  }, [target.name, years]);
 
   async function claim() {
     if (!wallet.connected || wallet.address == null) {
@@ -37,26 +54,9 @@ export default function RegisterModal({
     setError(null);
     setStep("signing");
     try {
-      if (DEMO_MODE) {
-        // Simulated flow — no chain interaction in demo mode.
-        await new Promise((r) => setTimeout(r, 900));
-      } else {
-        const { signTransaction, getNetwork } = await import("@stellar/freighter-api");
-        const { SideraClient } = await import("@sidera-protocol/sdk");
-        const client = new SideraClient({
-          contractId: process.env.NEXT_PUBLIC_SIDERIA_CONTRACT_ID ?? "",
-          network:
-            (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet",
-        });
-        // The SDK builds the tx; Freighter signs; the SDK submits.
-        const _client = client; // full submit wiring lands with the SDK publish
-        const networkPassphrase = await getNetwork();
-        await signTransaction("", networkPassphrase); // placeholder — replaced by SDK submit
-      }
-      setStep("submitting");
-      await new Promise((r) => setTimeout(r, 400));
+      const expiry = await registerName(wallet.address, target.name, years);
+      setExpiresAt(expiry);
       setStep("done");
-      rememberRegistration(target.name);
       onRegistered(target.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -64,7 +64,7 @@ export default function RegisterModal({
     }
   }
 
-  const busy = step === "signing" || step === "submitting";
+  const busy = step === "signing";
 
   return (
     <div
@@ -86,7 +86,7 @@ export default function RegisterModal({
             <p className="mt-1 text-sm text-gray-400">
               {DEMO_MODE
                 ? "Demo mode — the claim is simulated, no transaction is sent."
-                : "This opens your Freighter wallet to sign the registration."}
+                : "This opens your Freighter wallet to sign and pay for the registration."}
             </p>
           </div>
           <button
@@ -116,6 +116,30 @@ export default function RegisterModal({
             <dt className="text-gray-500">Points to</dt>
             <dd className="font-mono text-gray-200">your wallet (editable later)</dd>
           </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-gray-500">
+              <label htmlFor="register-years">Period</label>
+            </dt>
+            <dd>
+              <select
+                id="register-years"
+                value={years}
+                disabled={busy || step === "done"}
+                onChange={(e) => setYears(Number(e.target.value))}
+                className="rounded-md border border-space-800 bg-space-900 px-2 py-1 font-mono text-gray-200"
+              >
+                {YEAR_OPTIONS.map((y) => (
+                  <option key={y} value={y}>
+                    {y} {y === 1 ? "year" : "years"}
+                  </option>
+                ))}
+              </select>
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-gray-500">Price</dt>
+            <dd className="font-mono text-gray-200">{price ?? "…"}</dd>
+          </div>
         </dl>
 
         {error && (
@@ -131,6 +155,11 @@ export default function RegisterModal({
               {target.fullName} is yours
               {DEMO_MODE ? " (demo)" : ""}.
             </p>
+            {expiresAt && (
+              <p className="mt-1 text-sm text-gray-400">
+                Registered until {expiresAt.toLocaleDateString(undefined, { dateStyle: "long" })}
+              </p>
+            )}
             <button
               onClick={onClose}
               className="mt-3 w-full rounded-lg bg-space-800 py-2 text-sm text-gray-200 hover:bg-space-800/70"
@@ -155,10 +184,8 @@ export default function RegisterModal({
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             {step === "signing"
-              ? "Check your wallet…"
-              : step === "submitting"
-                ? "Submitting…"
-                : `Register ${target.fullName}`}
+              ? "Confirm in your wallet, then wait for the network…"
+              : `Register ${target.fullName}${price && price !== "unavailable" ? ` for ${price}` : ""}`}
           </button>
         )}
       </div>

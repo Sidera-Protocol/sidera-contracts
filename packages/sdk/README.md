@@ -47,17 +47,19 @@ Network defaults:
 
 ## Verified testnet deployment
 
-The current reverse-resolution contract is deployed on Stellar testnet at:
+The current contract (paid registration, renewals and expiry) is deployed on
+Stellar testnet at:
 
 ```text
-CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC
+CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT
 ```
 
-Explorer: <https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC>
+Explorer: <https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT>
 
-The deployment was verified by resolving a registered name with its memo hint
-and reading the address's `primaryName`. The transaction-level receipt is
-maintained in the contracts repository.
+This SDK was used to verify that deployment end to end: register, resolve with
+a memo, renew, set and read a primary name, and refused impostor and duplicate
+calls. The transaction-level receipt is
+[`docs/testnet-smoke-receipt.json`](../../docs/testnet-smoke-receipt.json).
 
 ## Resolving a name (reads)
 
@@ -91,17 +93,25 @@ const client = new SideraClient({
   network: "testnet",
   signer: {
     signTx: async (txXdr, networkPassphrase) =>
-      freighterApi.signTransaction(txXdr, { networkPassphrase }),
+      (await freighterApi.signTransaction(txXdr, { networkPassphrase, address: ownerAddress }))
+        .signedTxXdr,
   },
 });
 
-// Register a name (owner signs):
-const hash = await client.register({
+// What it costs (in the payment token's smallest unit, stroops for XLM):
+const cost = await client.price("alice", 2);
+
+// Register a name for 2 years (owner signs and pays):
+const { hash, expiresAt } = await client.register({
   name: "alice",
   owner: ownerAddress,        // must be the signing account
   address: destinationAddress,
   memo: "1029384756",         // optional memo hint
+  years: 2,                   // 1–10, default 1
 });
+
+// Renew it for another year (anyone may pay):
+await client.renew({ name: "alice", payer: ownerAddress, years: 1 });
 
 // Re-point a name:
 await client.setAddress({ name: "alice", address: newAddress }, ownerAddress);

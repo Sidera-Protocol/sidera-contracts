@@ -24,6 +24,20 @@ function AvailabilityPanel({ result, onClaim }: { result: Extract<LookupResult, 
   );
 }
 
+function ExpiredPanel({ result }: { result: Extract<LookupResult, { status: "expired" }> }) {
+  const day = (d: Date) => d.toLocaleDateString(undefined, { dateStyle: "long" });
+  return (
+    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-center">
+      <p className="font-mono text-2xl font-semibold text-white">{result.fullName}</p>
+      <p className="mt-1 text-sm text-amber-400">expired on {day(result.expiresAt)} — it does not resolve</p>
+      <p className="mt-3 text-sm text-gray-400">
+        Its owner can renew it until {day(result.releasedAt)}. After that, anyone can register it.
+      </p>
+      <p className="mt-2 break-all font-mono text-xs text-gray-500">owner {result.owner}</p>
+    </div>
+  );
+}
+
 function InvalidPanel({ result }: { result: Extract<LookupResult, { status: "invalid" }> }) {
   return (
     <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center">
@@ -86,6 +100,7 @@ export default function HomePage() {
             />
           )}
           {result?.status === "invalid" && <InvalidPanel result={result} />}
+          {result?.status === "expired" && <ExpiredPanel result={result} />}
         </section>
 
         {/* Value props */}

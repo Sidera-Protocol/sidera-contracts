@@ -24,13 +24,20 @@
 //! transferred-away owner is rejected on every subsequent call, and
 //! `total_names` tracks successful registrations exactly.
 //!
+//! **P4 — Payment conservation and bounded expiry.** For random sequences
+//! of `register` / `renew` with random lengths, years (including invalid
+//! ones) and time jumps, against priced names paid in a real Stellar Asset
+//! Contract: the treasury receives exactly the sum of the quoted prices of
+//! the successful calls, no token is created or lost, failed calls move no
+//! money, and no expiry ever exceeds `MAX_YEARS` from the time it was set.
+//!
 //! Runs are deterministic (fixed default seed); a failure prints its case
 //! for replay. Override the case count with
 //! `PROPTEST_CASES=n cargo test -p sidera-registry props`.
 
 use super::*;
 use proptest::prelude::*;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 
 // ---------------------------------------------------------------------------
 // Shared world: one fresh env + registry per case
@@ -44,7 +51,7 @@ struct World {
 fn setup_world() -> World {
     let env = Env::default();
     env.mock_all_auths();
-    let id = env.register(SideraRegistry, ());
+    let id = crate::testutil::deploy(&env, crate::testutil::free()).id;
     World { env, id }
 }
 
@@ -160,7 +167,7 @@ proptest! {
         // A name satisfying every documented validation rule must be
         // accepted — a rejection here means validation and the docs
         // disagree.
-        w.client().register(&name, &owner, &dest, &None);
+        w.client().register(&name, &owner, &dest, &None, &1);
         prop_assert!(w.client().exists(&name));
 
         // Round-trip: the record resolves with the exact inputs.
@@ -177,7 +184,7 @@ proptest! {
         let dest = Address::generate(&w.env);
         let name = w.name(&raw);
 
-        let accepted = match w.client().try_register(&name, &owner, &dest, &None) {
+        let accepted = match w.client().try_register(&name, &owner, &dest, &None, &1) {
             Ok(_) => true,
             Err(inv) => {
                 // The outer layer's error is a ConversionError; the
@@ -215,10 +222,10 @@ proptest! {
         let dest_b = Address::generate(&w.env);
         let name = w.name(&raw);
 
-        w.client().register(&name, &owner_a, &dest_a, &Some(w.name(&memo_a)));
+        w.client().register(&name, &owner_a, &dest_a, &Some(w.name(&memo_a)), &1);
         let err = w
             .client()
-            .try_register(&name, &owner_b, &dest_b, &Some(w.name(&memo_b)))
+            .try_register(&name, &owner_b, &dest_b, &Some(w.name(&memo_b)), &1)
             .unwrap_err()
             .unwrap();
         prop_assert_eq!(err, RegistryError::NameTaken);
@@ -247,7 +254,7 @@ proptest! {
         let name = w.name(&raw);
 
         let memo_opt = if memo.is_empty() { None } else { Some(w.name(&memo)) };
-        w.client().register(&name, &owner, &dest, &memo_opt);
+        w.client().register(&name, &owner, &dest, &memo_opt, &1);
 
         let resolution = w.client().resolve(&name);
         prop_assert_eq!(resolution.address, dest);
@@ -272,8 +279,8 @@ proptest! {
         let name_a = w.name(&raw_a);
         let name_b = w.name(&raw_b);
 
-        w.client().register(&name_a, &owner, &dest_a, &Some(w.name(&memo1)));
-        w.client().register(&name_b, &owner, &dest_b, &Some(w.name(&memo2)));
+        w.client().register(&name_a, &owner, &dest_a, &Some(w.name(&memo1)), &1);
+        w.client().register(&name_b, &owner, &dest_b, &Some(w.name(&memo2)), &1);
 
         // Owner rewrites A's address and memo; B's record must be untouched.
         w.client().set_address(&name_a, &owner, &dest_a_new, &Some(w.name(&memo2)));
@@ -299,7 +306,7 @@ proptest! {
         let name = w.name(&raw);
         let memo_opt = Some(w.name(&memo));
 
-        w.client().register(&name, &owner, &dest, &memo_opt);
+        w.client().register(&name, &owner, &dest, &memo_opt, &1);
 
         // Reads are side-effect-free w.r.t. the payload: resolving any
         // number of times never alters the record.
@@ -340,7 +347,7 @@ proptest! {
                     let key = w.name(&name);
                     let owner = Address::generate(&w.env);
                     let fresh = !mirror.owners.contains(&name);
-                    match w.client().try_register(&key, &owner, &dest, &memo.map(|m| w.name(&m))) {
+                    match w.client().try_register(&key, &owner, &dest, &memo.map(|m| w.name(&m)), &1) {
                         // Names from `valid_name()` satisfy every validation
                         // rule, so the only legal failure is a collision.
                         Ok(_) => {
@@ -410,6 +417,79 @@ proptest! {
             prop_assert!(w.client().exists(&key));
             prop_assert_eq!(w.client().owner_of(&key), owner.clone());
             let _ = w.client().resolve(&key);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P4 — payment conservation and bounded expiry
+// ---------------------------------------------------------------------------
+
+/// One step: (name index, years, seconds to skip first, renew instead of register, payer index).
+type Step = (usize, u32, u64, bool, usize);
+
+fn step() -> impl Strategy<Value = Step> {
+    (
+        0usize..4,
+        0u32..=MAX_YEARS + 2,
+        prop_oneof![Just(0u64), 0u64..YEAR_SECONDS, 0u64..(2 * YEAR_SECONDS)],
+        any::<bool>(),
+        0usize..3,
+    )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn p4_payments_balance_and_expiry_stays_bounded(steps in prop::collection::vec(step(), 1..25)) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let d = crate::testutil::deploy(&env, Prices { three: 700, four: 70, five_plus: 7 });
+        let c = SideraRegistryClient::new(&env, &d.id);
+
+        let names = ["abc", "abcd", "alice", "a-longer-name"];
+        let payers: std::vec::Vec<Address> = (0..3).map(|_| Address::generate(&env)).collect();
+        let start: i128 = 1_000_000;
+        for p in &payers {
+            d.fund(&env, p, start);
+        }
+        let total_supply = start * 3;
+        let mut expected_treasury: i128 = 0;
+
+        for (name_ix, years, skip, renew, payer_ix) in steps {
+            env.ledger().with_mut(|l| l.timestamp += skip);
+            let now = env.ledger().timestamp();
+            let name = String::from_str(&env, names[name_ix]);
+            let payer = &payers[payer_ix];
+            let before = c.try_expires_at(&name).ok().and_then(Result::ok);
+            let quote = c.try_price(&name, &years).ok().and_then(Result::ok);
+
+            let result = if renew {
+                c.try_renew(&name, payer, &years).ok().and_then(Result::ok)
+            } else {
+                c.try_register(&name, payer, payer, &None, &years).ok().and_then(Result::ok)
+            };
+
+            if let Some(expiry) = result {
+                let paid = quote.expect("a successful call must have had a valid quote");
+                expected_treasury += paid;
+                prop_assert!(expiry <= now + u64::from(MAX_YEARS) * YEAR_SECONDS,
+                    "expiry must stay within MAX_YEARS of now");
+                prop_assert_eq!(c.expires_at(&name), expiry);
+                if renew {
+                    let old = before.expect("renewal needs an existing expiry");
+                    prop_assert_eq!(expiry, old + u64::from(years) * YEAR_SECONDS,
+                        "renewal adds exactly the paid years to the old expiry");
+                }
+            }
+
+            // Conservation after every step, successful or not.
+            let treasury = d.balance(&env, &d.treasury);
+            prop_assert_eq!(treasury, expected_treasury,
+                "treasury must hold exactly the quoted prices of successful calls");
+            let held: i128 = payers.iter().map(|p| d.balance(&env, p)).sum();
+            prop_assert_eq!(held + treasury, total_supply, "no token created or lost");
         }
     }
 }

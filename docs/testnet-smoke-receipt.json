@@ -1,86 +1,118 @@
 {
   "status": "passed",
-  "executed_at": "2026-10-14",
+  "executed_at": "2026-11-12",
   "network": "testnet",
-  "contract_id": "CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC",
-  "contract_explorer": "https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC",
-  "wasm_sha256": "a15727e6210c1f8dd4ffb0bf71cb26c64a735a1fcc0d4f63e0af9b340c0ed3e1",
-  "wasm_bytes": 17362,
-  "source_revision": "d33697c",
-  "release_branch_head": "6c4a8f3",
+  "contract_id": "CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT",
+  "contract_explorer": "https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT",
+  "release": "pricing, renewals and expiry (yearly registration paid in a SEP-41 token)",
+  "source_revision": "ec3300d",
+  "wasm": {
+    "deployed": "stellar contract optimize output",
+    "deployed_sha256": "a7fbcce4832820080099e0e9fe4e69f8ef1d6cac084a0b0dd9ad455b478e34fb",
+    "deployed_bytes": 31244,
+    "cargo_release_sha256": "e755a4bc28a9b81e0c217ab6d811d2259f22858191bc7ac0c9ede60d89e6357a",
+    "cargo_release_bytes": 39829,
+    "reproduce": "cargo build --locked --release --target wasm32v1-none -p sidera-registry && stellar contract optimize --wasm target/wasm32v1-none/release/sidera_registry.wasm"
+  },
   "tool_versions": {
     "stellar_cli": "28.0.0",
     "rust": "1.96.0",
-    "soroban_sdk": "27.0.6"
+    "soroban_sdk": "27.0.6",
+    "node": "22.23.1"
+  },
+  "configuration": {
+    "admin": "GCVTFI7TFMXPRSZNRLVX4PR3VONM2UAQ7IXNCQUWFMXRH3MH7JEIH5V7",
+    "treasury": "GBFXSCKVHWVJCMTWG5L5KF6N74TRGNV7WHJ4G6UGTXHW5UBNINNJJ7OF",
+    "payment_token": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "payment_token_note": "native XLM Stellar Asset Contract on testnet",
+    "prices_per_year_stroops": {
+      "three": "500000000",
+      "four": "100000000",
+      "five_plus": "20000000"
+    },
+    "prices_per_year_xlm": {
+      "three": "50",
+      "four": "10",
+      "five_plus": "2"
+    }
   },
   "identities": {
-    "initial_owner": "sidera-smoke-owner",
-    "initial_owner_address": "GCR7CBH7IEMOB74H23HFEMMRPQKNJAFIORCHLYU4X5HQFUOF7E7RGJTQ",
-    "transferred_owner": "sidera-smoke-recipient",
-    "transferred_owner_address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF"
+    "owner": "GCSR2ZE22L2J7GG7AGJTMDXVG2TJIYBHGMTS2ARTGWBNH76NERHC6MMO",
+    "renewer_and_impostor": "GAR6XKZ4TU4LYPADJMOSENPCLP5JAT5ZZCA4IACOHI7EV6AZUBMM4BQD"
   },
   "deployment": {
-    "wasm_upload_transaction": "00ec386b4840e90eef7393719315707bab3959d4f8e6e48d6b10a6befd76c0e0",
-    "wasm_upload_explorer": "https://stellar.expert/explorer/testnet/tx/00ec386b4840e90eef7393719315707bab3959d4f8e6e48d6b10a6befd76c0e0",
-    "deploy_transaction": "78a6ad05351e051b9b4c6e29db8cd63ccdfa07b50ce937912546448712a92597",
-    "deploy_explorer": "https://stellar.expert/explorer/testnet/tx/78a6ad05351e051b9b4c6e29db8cd63ccdfa07b50ce937912546448712a92597"
+    "wasm_upload_transaction": "ab7dbe165b60529d6265c465d2db41e85ea32d1ca85074ebad3659eae7b3af84",
+    "wasm_upload_explorer": "https://stellar.expert/explorer/testnet/tx/ab7dbe165b60529d6265c465d2db41e85ea32d1ca85074ebad3659eae7b3af84",
+    "deploy_transaction": "47218f73b4daadf4373d2822aaa4f4d22cb03bb224fb9e38ccdf7799a0b3ff4a",
+    "deploy_explorer": "https://stellar.expert/explorer/testnet/tx/47218f73b4daadf4373d2822aaa4f4d22cb03bb224fb9e38ccdf7799a0b3ff4a"
   },
-  "smoke_name": "sidera-release-20261014",
+  "driver": "@sidera-protocol/sdk from packages/sdk (the same client the dashboard uses), signing each transaction with the Stellar CLI",
+  "smoke_name": "alice-pay",
   "steps": [
     {
-      "action": "register",
-      "transaction": "8c14fd8153eed9caebdaf51836269a17636cc21951737a189b5cf456cf12e689",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/8c14fd8153eed9caebdaf51836269a17636cc21951737a189b5cf456cf12e689",
-      "event": "registered",
-      "result": "sidera-release-20261014"
-    },
-    {
-      "action": "resolve",
-      "transaction": null,
-      "result": {
-        "address": "GCR7CBH7IEMOB74H23HFEMMRPQKNJAFIORCHLYU4X5HQFUOF7E7RGJTQ",
-        "memo": "sidera-smoke"
+      "what": "config",
+      "treasury": "GBFXSCKVHWVJCMTWG5L5KF6N74TRGNV7WHJ4G6UGTXHW5UBNINNJJ7OF",
+      "prices": {
+        "three": "500000000",
+        "four": "100000000",
+        "fivePlus": "20000000"
       }
     },
     {
-      "action": "set_address",
-      "transaction": "f8d0650398925e00deddf12b7bc8493b8456deaf32dba7eb6ac154cde705026f",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/f8d0650398925e00deddf12b7bc8493b8456deaf32dba7eb6ac154cde705026f",
-      "event": "address_set",
-      "result": {
-        "address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
-        "memo": "updated-smoke"
+      "what": "price quotes (stroops)",
+      "abc 1y": "500000000",
+      "abcd 1y": "100000000",
+      "alice-pay 2y": "40000000"
+    },
+    {
+      "what": "available before registering",
+      "name": "alice-pay",
+      "available": true
+    },
+    {
+      "what": "register 2 years, paid by owner",
+      "hash": "b310aabad0dccb2d6d281f6aba26fa6574db3cb39460a1ae18d7a01da62bbb06",
+      "expiresAt": "2028-11-11T23:10:34.000Z",
+      "treasuryReceived": "40000000",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/b310aabad0dccb2d6d281f6aba26fa6574db3cb39460a1ae18d7a01da62bbb06"
+    },
+    {
+      "what": "resolve (address + memo)",
+      "address": "GCSR2ZE22L2J7GG7AGJTMDXVG2TJIYBHGMTS2ARTGWBNH76NERHC6MMO",
+      "memo": {
+        "type": "id",
+        "value": "1029384756"
       }
     },
     {
-      "action": "transfer",
-      "transaction": "59a92369c34a0b058db98e755657f04170c4ca6a055294615152ce8b671815e4",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/59a92369c34a0b058db98e755657f04170c4ca6a055294615152ce8b671815e4",
-      "event": "transferred",
-      "result": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF"
+      "what": "renew 1 year, paid by someone else",
+      "hash": "2fac425f9d3bfee8929c9548b6c9ad5fe497f81f75c5787577ab104cac6e7e8a",
+      "expiresAt": "2029-11-11T23:10:34.000Z",
+      "treasuryReceived": "20000000",
+      "ownerUnchanged": true,
+      "explorer": "https://stellar.expert/explorer/testnet/tx/2fac425f9d3bfee8929c9548b6c9ad5fe497f81f75c5787577ab104cac6e7e8a"
     },
     {
-      "action": "set_primary_name",
-      "transaction": "fa8b0c143bd10f310a1311c3912c49774b11dcd90c237cc056bdb7bc1b2a8a60",
-      "explorer": "https://stellar.expert/explorer/testnet/tx/fa8b0c143bd10f310a1311c3912c49774b11dcd90c237cc056bdb7bc1b2a8a60",
-      "event": "primary_name_set",
-      "result": "sidera-release-20261014"
+      "what": "set primary name (owner, resolves to owner)",
+      "hash": "bdf24154ee678b9e1b7c440e924e827c95109e913852168617f9e3ca535dd104",
+      "primaryName": "alice-pay",
+      "explorer": "https://stellar.expert/explorer/testnet/tx/bdf24154ee678b9e1b7c440e924e827c95109e913852168617f9e3ca535dd104"
     },
     {
-      "action": "primary_name",
-      "transaction": null,
-      "result": "sidera-release-20261014"
+      "what": "impostor cannot claim someone else's name as primary",
+      "refusedWith": "UnauthorizedError",
+      "ok": true
+    },
+    {
+      "what": "taken name cannot be registered again",
+      "refusedWith": "NameTakenError",
+      "ok": true
+    },
+    {
+      "what": "expiry read back",
+      "expiresAt": "2029-11-11T23:10:34.000Z",
+      "available": false
     }
   ],
-  "post_transfer_checks": {
-    "owner_of": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
-    "resolve": {
-      "address": "GCTEIX3CMXJQFHJNISNSQT3LHNOGITU7H5UAPIJ4RLMS62SMFQBTVSGF",
-      "memo": "updated-smoke"
-    }
-  },
-  "notes": [
-    "No secret keys or seed phrases are recorded.",
-    "The deployment and all writes use Stellar testnet only."
-  ]
+  "previous_deployment": "docs/testnet-smoke-receipt-2026-10-14.json (CCZJ\u2026H7PC, before pricing; free registration)"
 }
