@@ -16,8 +16,9 @@
 //! - `set_primary_name` requires the address, which must be the owner of the
 //!   name *and* the address the name resolves to.
 //! - `set_prices`, `set_treasury` and `set_admin` require the admin.
-//! - `resolve`, `exists`, `owner_of`, `expires_at`, `is_available`, `price`,
-//!   `config` and `total_names` are read-only.
+//! - `upgrade` requires the admin.
+//! - `resolve`, `exists`, `owner_of`, `names_of`, `expires_at`, `is_available`,
+//!   `price`, `config` and `total_names` are read-only.
 //!
 //! Events (topics: event symbol + name; data in parentheses):
 //! - `registered(name)` — `(owner, address, memo, expires_at)` — a name was registered.
@@ -28,6 +29,7 @@
 //! - `prices_set()` — `(three, four, five_plus)` — the admin changed prices.
 //! - `treasury_set()` — `(treasury)` — the admin changed the treasury.
 //! - `admin_set()` — `(admin)` — the admin role moved.
+//! - `upgraded()` — `(wasm_hash)` — the admin replaced the contract code.
 #![no_std]
 // Soroban `#[contractimpl]` entrypoints take parameters **by value**: the SDK
 // macro derives the contract ABI from the exported signature, so `&Env` or
@@ -40,7 +42,7 @@ extern crate std;
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
-    token::TokenClient, Address, Env, String,
+    token::TokenClient, Address, BytesN, Env, String, Vec,
 };
 
 /// Errors for the Sidera registry.
@@ -66,6 +68,8 @@ pub enum RegistryError {
     InvalidPrice = 8,
     /// A renewal may not push the expiry more than [`MAX_YEARS`] ahead.
     PeriodTooLong = 9,
+    /// An owner may hold at most [`MAX_NAMES_PER_OWNER`] names.
+    TooManyNames = 10,
 }
 
 /// A resolved payment destination: the address plus an optional memo hint.
@@ -136,6 +140,24 @@ pub struct PricesSet {
 pub struct TreasurySet {
     /// The new treasury that receives payments.
     pub treasury: Address,
+}
+
+/// Emitted when the admin replaces the contract code. Data: `wasm_hash`.
+#[contractevent(topics = ["upgraded"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Upgraded {
+    /// Hash of the new contract code (already uploaded to the network).
+    pub wasm_hash: BytesN<32>,
+}
+
+/// A name an owner holds, with its expiry.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnedName {
+    /// Bare name, without the `.sid` suffix.
+    pub name: String,
+    /// When the registration expires (ledger timestamp, seconds).
+    pub expires_at: u64,
 }
 
 /// Emitted when the admin role moves. Data: `admin`.
@@ -219,7 +241,14 @@ enum DataKey {
     Expiry(String),
     /// Registry settings (instance storage).
     Config,
+    /// Names held by `Address`, in registration order. Entries can be stale
+    /// (expired and released, or re-registered by someone else); reads
+    /// filter them out and writes prune them.
+    OwnerNames(Address),
 }
+
+/// Most names one owner may hold. Keeps `names_of` and the index writes cheap.
+pub const MAX_NAMES_PER_OWNER: u32 = 100;
 
 /// Seconds in a (365-day) registration year.
 pub const YEAR_SECONDS: u64 = 31_536_000;
@@ -335,6 +364,17 @@ impl SideraRegistry {
             Status::Released => false,
             Status::Active(_) | Status::Grace(_) => return Err(RegistryError::NameTaken),
         };
+        if !fresh {
+            // A released name leaves its previous owner's list.
+            let previous: Option<Address> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Owner(name.clone()));
+            if let Some(previous) = previous {
+                Self::unlist(&env, &previous, &name);
+            }
+        }
+        Self::list(&env, &owner, &name)?;
 
         let amount = Self::quote(&env, &name, years)?;
         let expires_at = env
@@ -562,6 +602,7 @@ impl SideraRegistry {
         caller.require_auth();
         Self::require_active(&env, &name)?;
         Self::require_owner(&env, &name, &caller)?;
+        let caller_for_index = caller.clone();
 
         OwnershipTransferred {
             name: name.clone(),
@@ -570,6 +611,9 @@ impl SideraRegistry {
         }
         .publish(&env);
 
+        // Remove first, then add: correct even when transferring to oneself.
+        Self::unlist(&env, &caller_for_index, &name);
+        Self::list(&env, &new_owner, &name)?;
         env.storage()
             .persistent()
             .set(&DataKey::Owner(name.clone()), &new_owner);
@@ -693,6 +737,43 @@ impl SideraRegistry {
         Self::save_config(&env, &config);
     }
 
+    /// The names `owner` holds (active or in their grace period), with their
+    /// expiry, in registration order.
+    #[must_use]
+    pub fn names_of(env: Env, owner: Address) -> Vec<OwnedName> {
+        let key = DataKey::OwnerNames(owner.clone());
+        let listed: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut out = Vec::new(&env);
+        for name in listed.iter() {
+            if let Some(expires_at) = Self::held_by(&env, &name, &owner) {
+                out.push_back(OwnedName { name, expires_at });
+            }
+        }
+        if !listed.is_empty() {
+            env.storage().persistent().extend_ttl(
+                &key,
+                TTL_THRESHOLD_LEDGERS,
+                TTL_EXTEND_TO_LEDGERS,
+            );
+        }
+        out
+    }
+
+    /// Replace the contract code with an already-uploaded WASM, keeping the
+    /// contract ID and all stored names. Admin-only.
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) {
+        Self::load_config(&env).admin.require_auth();
+        Upgraded {
+            wasm_hash: wasm_hash.clone(),
+        }
+        .publish(&env);
+        env.deployer().update_current_contract_wasm(wasm_hash);
+    }
+
     /// Number of distinct names ever registered. Re-registering a released
     /// name does not count again.
     #[must_use]
@@ -749,6 +830,58 @@ impl SideraRegistry {
         let owner: Option<Address> = storage.get(&DataKey::Owner(name.clone()));
         let record: Option<Resolution> = storage.get(&DataKey::Name(name.clone()));
         owner.as_ref() == Some(address) && record.is_some_and(|r| &r.address == address)
+    }
+
+    /// If `owner` currently holds `name` (active or grace), its expiry.
+    fn held_by(env: &Env, name: &String, owner: &Address) -> Option<u64> {
+        let expiry = match Self::status(env, name) {
+            Status::Active(expiry) | Status::Grace(expiry) => expiry,
+            Status::Missing | Status::Released => return None,
+        };
+        let current: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Owner(name.clone()));
+        (current.as_ref() == Some(owner)).then_some(expiry)
+    }
+
+    /// Add `name` to `owner`'s list, pruning entries `owner` no longer holds.
+    fn list(env: &Env, owner: &Address, name: &String) -> Result<(), RegistryError> {
+        let key = DataKey::OwnerNames(owner.clone());
+        let listed: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        let mut kept = Vec::new(env);
+        for n in listed.iter() {
+            if &n != name && Self::held_by(env, &n, owner).is_some() {
+                kept.push_back(n);
+            }
+        }
+        if kept.len() >= MAX_NAMES_PER_OWNER {
+            return Err(RegistryError::TooManyNames);
+        }
+        kept.push_back(name.clone());
+        env.storage().persistent().set(&key, &kept);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, env.storage().max_ttl());
+        Ok(())
+    }
+
+    /// Remove `name` from `owner`'s list.
+    fn unlist(env: &Env, owner: &Address, name: &String) {
+        let key = DataKey::OwnerNames(owner.clone());
+        let listed: Option<Vec<String>> = env.storage().persistent().get(&key);
+        let Some(listed) = listed else { return };
+        let mut kept = Vec::new(env);
+        for n in listed.iter() {
+            if &n != name {
+                kept.push_back(n);
+            }
+        }
+        env.storage().persistent().set(&key, &kept);
     }
 
     /// Price of `years` years of `name`, without validation.
@@ -864,6 +997,9 @@ mod tests;
 
 #[cfg(test)]
 mod pricing_tests;
+
+#[cfg(test)]
+mod index_tests;
 
 #[cfg(test)]
 mod props;
