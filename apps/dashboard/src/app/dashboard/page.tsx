@@ -9,6 +9,7 @@ import {
   DEMO_MODE,
   namesOwnedBy,
   primaryNameOf,
+  renewName,
   setPrimaryName,
   DEMO_OWNER,
   type NameRecordView,
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const [editingPrimary, setEditingPrimary] = useState(false);
   const [primaryInput, setPrimaryInput] = useState("");
   const [savingPrimary, setSavingPrimary] = useState(false);
+  const [renewing, setRenewing] = useState<string | null>(null);
 
   // Demo mode: show the demo owner's names without requiring a wallet.
   const owner = wallet.connected ? wallet.address : DEMO_MODE ? DEMO_OWNER : null;
@@ -44,6 +46,20 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, [owner]);
+
+  async function renew(name: string) {
+    if (owner == null) return;
+    setRenewing(name);
+    setError(null);
+    try {
+      const expiresAt = await renewName(owner, name, 1);
+      setRecords((rs) => rs?.map((r) => (r.name === name ? { ...r, expiresAt } : r)) ?? rs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not renew ${name}.sid`);
+    } finally {
+      setRenewing(null);
+    }
+  }
 
   async function savePrimary() {
     if (owner == null) return;
@@ -127,7 +143,7 @@ export default function DashboardPage() {
               )}
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Wallets can show this name when displaying your address. {DEMO_MODE ? "Demo changes stay in this browser." : "Saving opens Freighter for approval."}
+              Wallets can show this name when displaying your address. It must be a name you own that points to your wallet. {DEMO_MODE ? "Demo changes stay in this browser." : "Saving opens Freighter for approval."}
             </p>
           </section>
         )}
@@ -173,7 +189,12 @@ export default function DashboardPage() {
         {records != null && records.length > 0 && (
           <div className="space-y-4">
             {records.map((r) => (
-              <DomainCard key={r.fullName} record={r} />
+              <DomainCard
+                key={r.fullName}
+                record={r}
+                onRenew={wallet.connected || DEMO_MODE ? () => void renew(r.name) : undefined}
+                renewing={renewing === r.name}
+              />
             ))}
           </div>
         )}

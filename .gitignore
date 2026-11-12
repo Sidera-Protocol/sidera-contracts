@@ -15,3 +15,7 @@ provenance-manifest.json
 contracts/registry/test_snapshots/props/
 contracts/registry/test_snapshots/tests/
 provenance-manifest.json
+
+# local deployment artifacts
+.deploy/
+testnet-smoke-output.json

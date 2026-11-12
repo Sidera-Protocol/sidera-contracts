@@ -80,6 +80,40 @@ export interface RegisterParams {
   address: string;
   /** Optional memo hint for the destination. */
   memo?: string;
+  /** Years to register for, 1–10. Defaults to 1. The owner pays `price(name, years)`. */
+  years?: number;
+}
+
+/** Parameters for renewing a name. Anyone may pay. */
+export interface RenewParams {
+  /** Bare name to renew. */
+  name: string;
+  /** Address that pays (must sign). */
+  payer: string;
+  /** Years to add, 1–10. Defaults to 1. */
+  years?: number;
+}
+
+/** Result of a write that sets an expiry (`register`, `renew`). */
+export interface ExpiryResult {
+  /** Transaction hash. */
+  hash: string;
+  /** When the name now expires. */
+  expiresAt: Date;
+}
+
+/** Registry settings as stored on-chain. Prices are per year, in the token's smallest unit. */
+export interface RegistryConfig {
+  admin: string;
+  /** SEP-41 payment token contract (C...). */
+  token: string;
+  /** Receives payments. */
+  treasury: string;
+  prices: {
+    three: bigint;
+    four: bigint;
+    fivePlus: bigint;
+  };
 }
 
 /** Parameters for transferring a name. */

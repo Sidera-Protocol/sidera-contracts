@@ -12,28 +12,30 @@ not a hidden gap.
 
 ## Registry semantics
 
-- **No pricing or renewals.** Registration is free and first-come-
-  first-served. Names stay alive through write-time and hot-lookup TTL
-  extensions; a name that is neither written nor resolved for the extension
-  horizon will eventually archive.
+- **Pricing is admin-controlled, without a timelock.** The admin can change
+  yearly prices and the treasury address at any time (each change emits an
+  event). Existing registrations keep their expiry; new prices apply to the
+  next registration or renewal.
+- **Payments go straight to one treasury address.** There is no refund,
+  revenue split or on-chain accounting beyond the token transfer and the
+  `registered` / `renewed` events.
+- **The testnet prices are demo values** (50 / 10 / 2 XLM per year). Real
+  prices are a decision for the mainnet launch.
+- **Storage can outlive its TTL less than the registration.** Paid writes
+  extend a name's entries to the network's maximum TTL, which can be shorter
+  than a 10-year registration. If a name is neither renewed, updated nor
+  resolved for that long, its entries archive and must be restored (a
+  standard Soroban restore) before use. The registration itself is not lost.
 - **No subnames.** Only second-level names under `.sid` can be registered;
   `pay.alice.sid` is not a thing yet.
-- **Reverse resolution is now supported.** `primary_name(address)` and
-  `set_primary_name(address, name)` are implemented and documented in the
-  [resolver interface](resolver-interface.md).
 - **Unilateral transfer.** `transfer` moves ownership without the
   recipient's acceptance, matching DNS/ENS convention. There is no
   escrowed or two-phase transfer.
-- **No expiration clock surface.** The contract exposes no query for a
-  name's remaining TTL; wallets and explorers cannot show "expires in N
-  days."
 
 ## Tooling
 
-- **SDK is maintained separately.** The TypeScript SDK now supports forward
-  and reverse resolution, but it is a separate package and release from this
-  contracts repository; consumers must align its version with the deployed
-  contract ABI.
+- **The SDK is not published to npm yet.** It lives in `packages/sdk` and the
+  dashboard uses it through npm workspaces.
 - **No indexer.** There is no off-chain index of registrations; all reads
   go through the contract.
 

@@ -22,15 +22,97 @@ export interface NameRecordView {
   source: "demo" | "chain";
   /** Mock-only: available names report no record yet. */
   available: boolean;
+  /** When the registration expires (null in demo mode). */
+  expiresAt: Date | null;
 }
 
 export type LookupResult =
   | { status: "found"; record: NameRecordView }
+  | { status: "expired"; name: string; fullName: string; owner: string; expiresAt: Date; releasedAt: Date }
   | { status: "available"; name: string; fullName: string; source: "demo" | "chain" }
   | { status: "invalid"; name: string; reason: string };
 
 const CONTRACT_ID = process.env.NEXT_PUBLIC_SIDERIA_CONTRACT_ID ?? "";
+const NETWORK = (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet";
 export const DEMO_MODE = CONTRACT_ID.length === 0;
+
+/** After expiry, only the owner's renewal is possible for this long (matches the contract). */
+const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function readClient() {
+  const { SideraClient } = await import("@sidera-protocol/sdk");
+  return new SideraClient({ contractId: CONTRACT_ID, network: NETWORK });
+}
+
+/** A client whose writes are signed by `address` through Freighter. */
+async function writeClient(address: string) {
+  const [{ signTransaction, getNetwork }, { SideraClient }] = await Promise.all([
+    import("@stellar/freighter-api"),
+    import("@sidera-protocol/sdk"),
+  ]);
+  const { networkPassphrase } = await getNetwork();
+  return new SideraClient({
+    contractId: CONTRACT_ID,
+    network: NETWORK,
+    signer: {
+      signTx: async (txXdr) => {
+        const signed = await signTransaction(txXdr, { networkPassphrase, address });
+        if ("error" in signed && signed.error) {
+          throw new Error("The transaction was not signed in Freighter");
+        }
+        return signed.signedTxXdr;
+      },
+    },
+  });
+}
+
+/** Stroops (7 decimals) → "2", "0.5", "12.25". */
+function formatUnits(amount: bigint): string {
+  const whole = amount / 10_000_000n;
+  const frac = (amount % 10_000_000n).toString().padStart(7, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
+
+/** Price of `years` years of `name`, ready to display. Demo mode uses the testnet demo prices. */
+export async function quotePrice(name: string, years: number): Promise<{ amount: bigint; display: string }> {
+  let amount: bigint;
+  let symbol = "XLM";
+  if (DEMO_MODE) {
+    const perYear = name.length === 3 ? 500_000_000n : name.length === 4 ? 100_000_000n : 20_000_000n;
+    amount = perYear * BigInt(years);
+  } else {
+    const client = await readClient();
+    const [quote, config] = await Promise.all([client.price(name, years), client.config()]);
+    amount = quote;
+    const { Asset, Networks } = await import("@stellar/stellar-sdk");
+    const passphrase = NETWORK === "futurenet" ? Networks.FUTURENET : Networks.TESTNET;
+    if (config.token !== Asset.native().contractId(passphrase)) symbol = "tokens";
+  }
+  return { amount, display: `${formatUnits(amount)} ${symbol}` };
+}
+
+/** Register `name` for `years` years, owned by and pointing to `owner`. Returns the expiry. */
+export async function registerName(owner: string, name: string, years: number): Promise<Date> {
+  if (DEMO_MODE) {
+    await new Promise((r) => setTimeout(r, 900));
+    rememberRegistration(name);
+    return new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000);
+  }
+  const client = await writeClient(owner);
+  const { expiresAt } = await client.register({ name, owner, address: owner, years });
+  rememberRegistration(name);
+  return expiresAt;
+}
+
+/** Renew `name` by `years` years, paid by `payer`. Returns the new expiry. */
+export async function renewName(payer: string, name: string, years: number): Promise<Date> {
+  if (DEMO_MODE) {
+    await new Promise((r) => setTimeout(r, 600));
+    return new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000);
+  }
+  const client = await writeClient(payer);
+  return (await client.renew({ name, payer, years })).expiresAt;
+}
 
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -58,20 +140,19 @@ export async function lookupName(raw: string): Promise<LookupResult> {
     if (hit == null) {
       return { status: "available", name, fullName: `${name}.sid`, source: "demo" };
     }
-    return { status: "found", record: { name, fullName: `${name}.sid`, ...hit, source: "demo", available: false } };
+    return {
+      status: "found",
+      record: { name, fullName: `${name}.sid`, ...hit, source: "demo", available: false, expiresAt: null },
+    };
   }
 
   // Live path via the real SDK.
-  const { SideraClient } = await import("@sidera-protocol/sdk");
-  const client = new SideraClient({
-    contractId: CONTRACT_ID,
-    network: (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet",
-  });
+  const client = await readClient();
   try {
     const res = await client.resolve(name);
-    // The registry keeps ownership separate from the payment record
-    // (`owner_of` entrypoint), so fetch it alongside the resolution.
-    const ownerAddress = await client.ownerOf(name);
+    // The registry keeps ownership and expiry separate from the payment
+    // record, so fetch them alongside the resolution.
+    const [ownerAddress, expiresAt] = await Promise.all([client.ownerOf(name), client.expiresAt(name)]);
     return {
       status: "found",
       record: {
@@ -82,10 +163,22 @@ export async function lookupName(raw: string): Promise<LookupResult> {
         memo: res.memo,
         source: "chain",
         available: false,
+        expiresAt,
       },
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (/has expired|NameExpired/i.test(message)) {
+      const [owner, expiresAt] = await Promise.all([client.ownerOf(name), client.expiresAt(name)]);
+      return {
+        status: "expired",
+        name,
+        fullName: `${name}.sid`,
+        owner,
+        expiresAt,
+        releasedAt: new Date(expiresAt.getTime() + GRACE_PERIOD_MS),
+      };
+    }
     if (/not registered|NotFound/i.test(message)) {
       return { status: "available", name, fullName: `${name}.sid`, source: "chain" };
     }
@@ -106,14 +199,11 @@ export async function namesOwnedBy(owner: string): Promise<NameRecordView[]> {
         memo: rec.memo,
         source: "demo" as const,
         available: false,
+        expiresAt: null,
       }));
   }
 
-  const { SideraClient } = await import("@sidera-protocol/sdk");
-  const client = new SideraClient({
-    contractId: CONTRACT_ID,
-    network: (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet",
-  });
+  const client = await readClient();
   // Owner-listing requires the contract's enumeration tranche (tracked in
   // the issue ladder). Until then, live mode checks the local registration
   // log kept by this client — names registered from this browser resolve
@@ -124,7 +214,7 @@ export async function namesOwnedBy(owner: string): Promise<NameRecordView[]> {
     try {
       const nameOwner = await client.ownerOf(name);
       if (nameOwner !== owner) continue;
-      const res = await client.resolve(name);
+      const [res, expiresAt] = await Promise.all([client.resolve(name), client.expiresAt(name)]);
       results.push({
         name: res.name,
         fullName: res.fullName,
@@ -133,6 +223,7 @@ export async function namesOwnedBy(owner: string): Promise<NameRecordView[]> {
         memo: res.memo,
         source: "chain",
         available: false,
+        expiresAt,
       });
     } catch {
       // Name since expired or removed — drop from the log on read.
@@ -148,11 +239,7 @@ export async function primaryNameOf(address: string): Promise<string | null> {
     return window.localStorage.getItem(PRIMARY_NAME_KEY) ?? "alice";
   }
 
-  const { SideraClient } = await import("@sidera-protocol/sdk");
-  const client = new SideraClient({
-    contractId: CONTRACT_ID,
-    network: (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet",
-  });
+  const client = await readClient();
   try {
     return await client.primaryName(address);
   } catch (err) {
@@ -168,19 +255,7 @@ export async function setPrimaryName(address: string, name: string): Promise<voi
     return;
   }
 
-  const [{ signTransaction, getNetwork }, { SideraClient }] = await Promise.all([
-    import("@stellar/freighter-api"),
-    import("@sidera-protocol/sdk"),
-  ]);
-  const { networkPassphrase } = await getNetwork();
-  const client = new SideraClient({
-    contractId: CONTRACT_ID,
-    network: (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet",
-    signer: {
-      signTx: async (txXdr) =>
-        (await signTransaction(txXdr, { networkPassphrase, address })).signedTxXdr,
-    },
-  });
+  const client = await writeClient(address);
   await client.setPrimaryName(address, name);
 }
 

@@ -28,12 +28,12 @@ resolution.
 
 | Part | What works today |
 |---|---|
-| Registry contract (`contracts/registry`) | `register`, `resolve`, `set_address`, `transfer`, `owner_of`, `exists`, `total_names`, reverse resolution (`primary_name`, `set_primary_name`), TTL extension on write. Deployed on testnet. |
-| TypeScript SDK (`packages/sdk`) | Forward and reverse resolution, registration and updates through the contract, Protocol 23 RPC decoding. |
-| Dashboard (`apps/dashboard`) | Search, resolve and claim `.sid` names with Freighter; set a primary name. |
+| Registry contract (`contracts/registry`) | Yearly registration paid in a SEP-41 token (price by name length), `renew` (anyone may pay), expiry with a 30-day grace period, `resolve` with memo hints, `set_address`, `transfer`, verified primary names (`set_primary_name` / `primary_name`), admin-set prices and treasury. Deployed on testnet. |
+| TypeScript SDK (`packages/sdk`) | Every contract call, including `register` (with years), `renew`, `expiresAt`, `price`, `isAvailable` and `config`. Writes are simulated, signed, submitted and confirmed; proven end to end on testnet. |
+| Dashboard (`apps/dashboard`) | Search and resolve names, see when they expire, register with Freighter for 1–10 years at the live on-chain price, renew, and set a primary name. |
 
-Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): pricing and
-renewals, subnames, expiry queries, an indexer, and an independent audit.
+Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): subnames, an
+indexer, a mainnet deployment and an independent audit.
 
 ## Documentation
 
@@ -69,12 +69,17 @@ dashboard screen land in the same pull request.
 | Item | Value |
 |---|---|
 | Network | Stellar **Testnet** |
-| Deployed | 2026-10-14 |
-| Contract ID | `CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC` |
-| WASM sha256 | `a15727e6210c1f8dd4ffb0bf71cb26c64a735a1fcc0d4f63e0af9b340c0ed3e1` (17,362 bytes) |
-| Live round-trip | register → resolve → address update → transfer → `set_primary_name` → `primary_name` confirmed via stellar-cli 28.0.0 |
+| Deployed | 2026-11-12 (pricing, renewals and expiry) |
+| Contract ID | `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT` |
+| WASM sha256 | `a7fbcce4832820080099e0e9fe4e69f8ef1d6cac084a0b0dd9ad455b478e34fb` (31,244 bytes, `stellar contract optimize` of revision `ec3300d`) |
+| Payment | Native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ character names (testnet demo prices) |
+| Live round-trip | Through the SDK: register for 2 years (treasury received 4 XLM) → resolve with memo → renewal paid by another account (+2 XLM, owner unchanged) → primary name → an impostor's primary-name claim refused → duplicate registration refused |
 
-Explorer: <https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC>
+Every transaction is linked in the [smoke receipt](docs/testnet-smoke-receipt.json).
+Explorer: <https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT>
+
+The earlier free-registration deployment (`CCZJ…H7PC`, 2026-10-14) is recorded
+in [its own receipt](docs/testnet-smoke-receipt-2026-10-14.json).
 
 > The registry is deployed on **Stellar testnet only** — no mainnet
 > deployment exists. Do not send real funds based on name resolution until a

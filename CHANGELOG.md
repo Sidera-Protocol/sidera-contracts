@@ -8,6 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Paid registration, renewal and expiry.** Names are registered for 1–10
+  years and paid in a SEP-41 token to a treasury, at a yearly price by name
+  length. Expired names stop resolving; for 30 days only renewal is possible,
+  then the name is released. Anyone may pay for a renewal. New contract calls:
+  `renew`, `expires_at`, `is_available`, `price`, `config`, and admin-only
+  `set_prices`, `set_treasury`, `set_admin`. New events: `renewed`,
+  `prices_set`, `treasury_set`, `admin_set`; `registered` now carries
+  `expires_at`.
+- **SDK:** `register` takes `years` and returns `{ hash, expiresAt }`; new
+  `renew`, `expiresAt`, `isAvailable`, `price`, `config` and `NameExpiredError`.
+- **Dashboard:** choose 1–10 years at the live on-chain price, see when names
+  expire, renew owned names, and see expired names in search.
+- **Testnet deployment** `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT`,
+  exercised end to end through the SDK; see `docs/testnet-smoke-receipt.json`.
+- Property test P4: payments always balance and expiry stays within 10 years.
+
+### Changed
+- **One repository.** `sidera-sdk` and `sidera-app` were merged into this
+  repository (`packages/sdk`, `apps/dashboard`) with their history; it is now
+  `Sidera-Protocol/sidera-protocol`. The repository bots moved out.
+- Contract WASM budget in CI raised to 48 KiB (39,829 bytes; 31,244 optimized).
+
+### Fixed
+- **Primary-name spoofing:** `set_primary_name` accepted any name, so an
+  address could display a name it did not own. It now requires the name to be
+  active, owned by the address and resolving to it, and `primary_name` stops
+  returning a name that no longer matches.
+- **SDK writes never reached the chain:** `Option<String>` was encoded as a
+  vector (rejected by the contract), and transactions were sent without being
+  prepared or confirmed.
+- **Dashboard registration was a placeholder** that reported success without
+  sending a transaction.
+
+### Added (earlier)
 - **Reverse resolution**: addresses can set and query a preferred primary
   name through `set_primary_name` and `primary_name`, with owner
   authorization, TTL handling, events, and focused tests.

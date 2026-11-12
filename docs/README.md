@@ -20,12 +20,12 @@ provides a user-facing integration of both layers.
 
 The registry is deployed on Stellar **Testnet** only:
 
-- Contract: `CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC`
-- Explorer: [Stellar Lab testnet contract page](https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC)
+- Contract: `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT`
+- Explorer: [Stellar Lab testnet contract page](https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT)
 
 There is no mainnet deployment. Do not send real funds based on name
-resolution until a mainnet deployment is announced in the contracts
-repository and its security policy.
+resolution until a mainnet deployment is announced in this repository's
+README and [security policy](../SECURITY.md).
 
 ## Documentation by audience
 

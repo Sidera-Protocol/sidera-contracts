@@ -5,7 +5,7 @@ covers what an integration **must** do; `docs/resolver-interface.md` specifies
 the contract interface itself, and the testnet deployment used below is listed
 in the [README](../README.md#testnet-deployment-proof).
 
-## The four rules
+## The five rules
 
 1. **Resolve against the official registry contract only.** Pin the registry
    contract ID in your client (testnet ID in the README; a SEP-style
@@ -23,6 +23,10 @@ in the [README](../README.md#testnet-deployment-proof).
    through to your payment flow without stripping or rewriting it — the
    56-character string your user no longer has to paste still has to arrive
    at the network intact.
+5. **Never pay an expired name.** `resolve` fails with `NameExpired` (SDK:
+   `NameExpiredError`) once a name's registration runs out. Treat it like an
+   unknown name: stop, and never fall back to a cached address. You can show
+   the user when it expired with `expiresAt(name)`.
 
 ## Calling `resolve`
 
@@ -34,7 +38,7 @@ entrypoints directly:
 ```typescript
 import { contract } from "@stellar/stellar-sdk";
 
-const REGISTRY_ID = "CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC";
+const REGISTRY_ID = "CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
@@ -62,9 +66,9 @@ The same call from the CLI (useful for smoke-testing a deployment):
 
 ```bash
 stellar contract invoke \
-  --id CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC \
-  --network testnet \
-  --fn resolve --arg alice
+  --id CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT \
+  --network testnet --source <any-identity> --send no \
+  -- resolve --name alice-pay
 ```
 
 ## Watching for changes
@@ -103,8 +107,9 @@ should use those methods rather than duplicating contract invocation logic.
 
 ## What Sidera does not do yet
 
-Subnames and pricing/renewals are future tranches — see
+Subnames and an indexer are future tranches — see
 [KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md) and the roadmap in the
-[README](../README.md#status). Reverse resolution is implemented across the
-registry, SDK, and dashboard. The registry is deployed on **testnet only**;
+[README](../README.md#status). Paid registration, renewal and expiry, and
+verified reverse resolution, are implemented across the registry, SDK and
+dashboard. The registry is deployed on **testnet only**;
 do not point production payment flows at it.

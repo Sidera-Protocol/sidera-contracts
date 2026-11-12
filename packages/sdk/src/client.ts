@@ -2,9 +2,11 @@
  * SideraClient — the single entry point wallets and payment apps use to
  * talk to a deployed Sidera registry over Soroban RPC.
  *
- * Read calls (`resolve`, `ownerOf`, `exists`, `primaryName`) simulate the invocation and
- * decode the result. Write calls (`register`, `setAddress`, `transfer`, `setPrimaryName`)
- * build, sign (via the configured signer), and submit real transactions.
+ * Read calls (`resolve`, `ownerOf`, `exists`, `primaryName`, `expiresAt`, `isAvailable`,
+ * `price`, `config`) simulate the invocation and decode the result. Write calls
+ * (`register`, `renew`, `setAddress`, `transfer`, `setPrimaryName`) are simulated to
+ * prepare their footprint and fees, signed via the configured signer, submitted, and
+ * awaited until the network confirms success or failure.
  *
  * Type notes (verified against @stellar/stellar-sdk 13.x):
  * - `TransactionBuilder`, `Account`, `Transaction` are top-level re-exports
@@ -23,6 +25,7 @@ import {
   Keypair,
   Networks,
   rpc,
+  scValToBigInt,
   Transaction,
   TransactionBuilder,
   xdr,
@@ -31,8 +34,11 @@ import { errorFromCode, SideraError } from "./errors.js";
 import { assertValidName, normalizeName } from "./names.js";
 import { parseMemoHint } from "./memo.js";
 import type {
+  ExpiryResult,
   ParsedMemo,
   RegisterParams,
+  RegistryConfig,
+  RenewParams,
   ResolutionResult,
   RpcTxOptions,
   SideraConfig,
@@ -57,6 +63,11 @@ const AddressC = Address as unknown as (new (value: string) => AddressLike) & {
 
 type SimulateResponse = Awaited<ReturnType<rpc.Server["simulateTransaction"]>>;
 type SendResponse = Awaited<ReturnType<rpc.Server["sendTransaction"]>>;
+type GetTxResponse = Awaited<ReturnType<rpc.Server["getTransaction"]>>;
+
+/** How long to wait for a submitted transaction, polling once a second. */
+const CONFIRM_ATTEMPTS = 30;
+const CONFIRM_INTERVAL_MS = 1_000;
 
 function networkPassphrase(network: string): string {
   switch (network) {
@@ -199,6 +210,64 @@ export class SideraClient {
     return present === true;
   }
 
+  /**
+   * When a name expires. Works while the name is active and during its grace period.
+   *
+   * @throws `NameNotFoundError` when the name is not registered, or was released.
+   */
+  async expiresAt(nameInput: string): Promise<Date> {
+    const name = normalizeName(nameInput);
+    assertValidName(name);
+    const seconds = await this.callRead<bigint | null>("expires_at", [scValString(name)], name);
+    if (seconds == null) {
+      throw errorFromCode(1, name);
+    }
+    return secondsToDate(seconds);
+  }
+
+  /** Whether a name is valid and can be registered right now. Invalid names return `false`. */
+  async isAvailable(nameInput: string): Promise<boolean> {
+    const name = normalizeName(nameInput);
+    try {
+      assertValidName(name);
+    } catch {
+      return false;
+    }
+    const free = await this.callRead<boolean>("is_available", [scValString(name)], name);
+    return free === true;
+  }
+
+  /**
+   * What registering or renewing a name for `years` years costs, in the payment
+   * token's smallest unit (stroops for XLM).
+   */
+  async price(nameInput: string, years = 1): Promise<bigint> {
+    const name = normalizeName(nameInput);
+    assertValidName(name);
+    const amount = await this.callRead<bigint>("price", [scValString(name), scValYears(years)], name);
+    return BigInt(amount);
+  }
+
+  /** The registry's admin, payment token, treasury and yearly prices. */
+  async config(): Promise<RegistryConfig> {
+    const raw = await this.callRead<{
+      admin: string;
+      token: string;
+      treasury: string;
+      prices: { three: bigint; four: bigint; five_plus: bigint };
+    }>("config", [], "config");
+    return {
+      admin: raw.admin,
+      token: raw.token,
+      treasury: raw.treasury,
+      prices: {
+        three: BigInt(raw.prices.three),
+        four: BigInt(raw.prices.four),
+        fivePlus: BigInt(raw.prices.five_plus),
+      },
+    };
+  }
+
   /** Return the preferred display name for an address. */
   async primaryName(address: string): Promise<string> {
     const name = await this.callRead<string | null>("primary_name", [addressScVal(address)], address);
@@ -213,34 +282,56 @@ export class SideraClient {
   // ------------------------------------------------------------------
 
   /**
-   * Register `params.name` for `params.owner`. Builds, signs via the
-   * configured signer, and submits the transaction; returns its hash.
+   * Register `params.name` for `params.owner` for `params.years` years (default 1).
+   * The owner pays `price(name, years)` in the registry's payment token. Returns the
+   * transaction hash and the new expiry.
    *
-   * @throws `NameTakenError` when the name is already registered.
+   * @throws `NameTakenError` when the name is active or in its grace period.
    * @throws `InvalidNameError` when validation fails on- or off-chain.
    */
-  async register(params: RegisterParams, options: RpcTxOptions = {}): Promise<string> {
+  async register(params: RegisterParams, options: RpcTxOptions = {}): Promise<ExpiryResult> {
     const name = normalizeName(params.name);
     assertValidName(name);
-    return this.submit(
+    const { hash, returnValue } = await this.submit(
       "register",
       [
         scValString(name),
         addressScVal(params.owner),
         addressScVal(params.address),
         scValOptionString(params.memo),
+        scValYears(params.years ?? 1),
       ],
       params.owner,
       name,
       options,
     );
+    return { hash, expiresAt: secondsToDate(returnValue as bigint) };
+  }
+
+  /**
+   * Extend a name by `params.years` years (default 1), paid by `params.payer`.
+   * Anyone may renew; renewing gives no ownership. Works during the grace period.
+   *
+   * @throws `NameNotFoundError` when the name is not registered, or was released.
+   */
+  async renew(params: RenewParams, options: RpcTxOptions = {}): Promise<ExpiryResult> {
+    const name = normalizeName(params.name);
+    assertValidName(name);
+    const { hash, returnValue } = await this.submit(
+      "renew",
+      [scValString(name), addressScVal(params.payer), scValYears(params.years ?? 1)],
+      params.payer,
+      name,
+      options,
+    );
+    return { hash, expiresAt: secondsToDate(returnValue as bigint) };
   }
 
   /** Transfer a name to a new owner. Returns the submitted tx hash. */
   async transfer(params: TransferParams, options: RpcTxOptions = {}): Promise<string> {
     const name = normalizeName(params.name);
     assertValidName(name);
-    return this.submit(
+    return this.submitForHash(
       "transfer",
       [
         scValString(name),
@@ -261,7 +352,7 @@ export class SideraClient {
   ): Promise<string> {
     const name = normalizeName(params.name);
     assertValidName(name);
-    return this.submit(
+    return this.submitForHash(
       "set_address",
       [
         scValString(name),
@@ -283,7 +374,7 @@ export class SideraClient {
   ): Promise<string> {
     const name = normalizeName(nameInput);
     assertValidName(name);
-    return this.submit(
+    return this.submitForHash(
       "set_primary_name",
       [addressScVal(address), scValString(name)],
       address,
@@ -324,14 +415,29 @@ export class SideraClient {
     return scValToJs(sim.result.retval) as T;
   }
 
-  /** Build, sign via the configured signer, and submit a transaction. */
-  private async submit(
+  /** Submit a write and return only its hash. */
+  private async submitForHash(
     fn: string,
     args: xdr.ScVal[],
     source: string,
     name: string,
     options: RpcTxOptions,
   ): Promise<string> {
+    return (await this.submit(fn, args, source, name, options)).hash;
+  }
+
+  /**
+   * Build the invocation, simulate it to add its footprint, auth and resource
+   * fees (`prepareTransaction`), sign via the configured signer, submit, and wait
+   * until the network confirms it. Returns the hash and the decoded return value.
+   */
+  private async submit(
+    fn: string,
+    args: xdr.ScVal[],
+    source: string,
+    name: string,
+    options: RpcTxOptions,
+  ): Promise<{ hash: string; returnValue: unknown }> {
     const signer = this.signer;
     if (signer == null) {
       throw new SideraError(
@@ -350,7 +456,17 @@ export class SideraClient {
       .setTimeout(options.timeoutSeconds ?? 30)
       .build();
 
-    const signedXdr = await signer.signTx(tx.toXDR(), this.passphrase);
+    // Soroban transactions need their storage footprint, authorization entries
+    // and resource fee from a simulation before they can be submitted. A
+    // contract error surfaces here, before anything is signed.
+    let prepared: Transaction;
+    try {
+      prepared = (await this.server.prepareTransaction(tx)) as Transaction;
+    } catch (err) {
+      throw toContractError(err, name);
+    }
+
+    const signedXdr = await signer.signTx(prepared.toXDR(), this.passphrase);
     const signed = new Transaction(signedXdr, this.passphrase);
     const response: SendResponse = await this.server.sendTransaction(signed);
     if ("errorResult" in response && response.errorResult != null) {
@@ -359,7 +475,37 @@ export class SideraClient {
         ? errorFromCode(code, name)
         : new SideraError("TxFailed", `Transaction failed: ${response.status}`);
     }
-    return response.hash;
+    if (response.status === "ERROR") {
+      throw new SideraError("TxFailed", "The network rejected the transaction");
+    }
+
+    const result = await this.waitFor(response.hash);
+    if (result.status === "SUCCESS") {
+      const ret = "returnValue" in result ? result.returnValue : undefined;
+      return { hash: response.hash, returnValue: ret == null ? null : scValToJs(ret) };
+    }
+    if (result.status === "FAILED") {
+      const code = "resultXdr" in result && result.resultXdr != null
+        ? extractContractCode(result.resultXdr)
+        : null;
+      throw code != null
+        ? errorFromCode(code, name)
+        : new SideraError("TxFailed", `Transaction ${response.hash} failed`);
+    }
+    throw new SideraError(
+      "TxTimeout",
+      `Transaction ${response.hash} was not confirmed in time; check it on an explorer`,
+    );
+  }
+
+  /** Poll until the transaction leaves NOT_FOUND, or give up. */
+  private async waitFor(hash: string): Promise<GetTxResponse> {
+    let last: GetTxResponse = await this.server.getTransaction(hash);
+    for (let i = 1; i < CONFIRM_ATTEMPTS && last.status === "NOT_FOUND"; i++) {
+      await new Promise((resolve) => setTimeout(resolve, CONFIRM_INTERVAL_MS));
+      last = await this.server.getTransaction(hash);
+    }
+    return last;
   }
 }
 
@@ -379,12 +525,28 @@ function addressScVal(value: string): xdr.ScVal {
   return new AddressC(value).toScVal();
 }
 
-/** Soroban `Option<String>`: `Some` is a 1-element vec, `None` an empty one. */
+/**
+ * Soroban `Option<String>`: `None` is `Void` and `Some(s)` is the string itself.
+ * (A vec here is rejected on-chain with `Error(WasmVm, InvalidAction)`.)
+ */
 function scValOptionString(value: string | undefined): xdr.ScVal {
   if (value == null) {
-    return xdr.ScVal.scvVec([]);
+    return xdr.ScVal.scvVoid();
   }
-  return xdr.ScVal.scvVec([scValString(value)]);
+  return scValString(value);
+}
+
+/** `years` as the contract's `u32`, checked client-side (1–10). */
+function scValYears(years: number): xdr.ScVal {
+  if (!Number.isInteger(years) || years < 1 || years > 10) {
+    throw new SideraError("InvalidYears", "Years must be a whole number between 1 and 10");
+  }
+  return xdr.ScVal.scvU32(years);
+}
+
+/** Ledger timestamp (seconds) → Date. */
+function secondsToDate(seconds: bigint | number): Date {
+  return new Date(Number(seconds) * 1000);
 }
 
 /**
@@ -407,7 +569,10 @@ function scValToJs(v: xdr.ScVal): unknown {
     case "scvI32":
       return v.i32();
     case "scvU64":
-      return BigInt(v.u64().toString());
+    case "scvI64":
+    case "scvU128":
+    case "scvI128":
+      return scValToBigInt(v);
     case "scvVoid":
       return null;
     case "scvVec": {

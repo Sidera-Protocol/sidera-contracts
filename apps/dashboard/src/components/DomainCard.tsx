@@ -34,8 +34,16 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Viewer for a registered name record. */
-export default function DomainCard({ record }: { record: NameRecordView }) {
+/** Viewer for a registered name record. `onRenew` adds a renew button. */
+export default function DomainCard({
+  record,
+  onRenew,
+  renewing = false,
+}: {
+  record: NameRecordView;
+  onRenew?: () => void;
+  renewing?: boolean;
+}) {
   return (
     <article className="rounded-2xl border border-space-800 bg-space-900 p-6">
       <header className="mb-5 flex items-center justify-between">
@@ -51,6 +59,29 @@ export default function DomainCard({ record }: { record: NameRecordView }) {
         <Field label="Owner" value={record.owner} />
         <Field label="Resolves to" value={record.address} />
       </dl>
+
+      {(record.expiresAt || onRenew) && (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          {record.expiresAt && (
+            <p className="text-sm text-gray-400">
+              Registered until{" "}
+              <span className="text-gray-200">
+                {record.expiresAt.toLocaleDateString(undefined, { dateStyle: "long" })}
+              </span>
+            </p>
+          )}
+          {onRenew && (
+            <button
+              type="button"
+              onClick={onRenew}
+              disabled={renewing}
+              className="rounded-lg bg-space-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-space-800/70 disabled:opacity-60"
+            >
+              {renewing ? "Renewing…" : "Renew 1 year"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-5 flex items-center gap-3">
         <span className="text-xs uppercase tracking-wide text-gray-500">Memo hint</span>
