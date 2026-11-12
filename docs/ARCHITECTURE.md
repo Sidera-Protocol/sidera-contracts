@@ -1,7 +1,7 @@
 # Sidera architecture
 
-Sidera is split into three repositories with a contract-first integration
-boundary.
+Sidera is one repository with three parts and a contract-first integration
+boundary: `contracts/registry`, `packages/sdk` and `apps/dashboard`.
 
 ```text
 Stellar wallet / user
@@ -14,7 +14,7 @@ sidera-app ───────► sidera-sdk ───────► Soroban 
 
 ## Contracts layer
 
-`sidera-contracts` contains the Rust `no_std` Soroban registry. It owns the
+`contracts/registry` contains the Rust `no_std` Soroban registry. It owns the
 canonical name record and enforces the protocol rules for registration,
 resolution, address updates, and ownership transfer. The contract is the
 source of truth; clients must not treat locally cached names as authoritative.
@@ -26,7 +26,7 @@ represented.
 
 ## SDK layer
 
-`sidera-sdk` is the TypeScript boundary for wallets and payment applications.
+`packages/sdk` is the TypeScript boundary for wallets and payment applications.
 It normalizes and validates names, simulates read calls, builds and submits
 write transactions, and maps contract errors to typed SDK errors. The SDK
 accepts a small signer interface so wallet adapters do not need to be coupled
@@ -34,7 +34,7 @@ to a particular wallet implementation.
 
 ## Application layer
 
-`sidera-app` is the Next.js dashboard. It uses the SDK for registry reads and
+`apps/dashboard` is the Next.js dashboard. It uses the SDK for registry reads and
 writes and uses Freighter for wallet signing. The application may provide
 convenient loading, error, and demo states, but it must display the network and
 contract configuration clearly and must not imply that demo data is on-chain.

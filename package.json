@@ -1,0 +1,18 @@
+{
+  "name": "sidera",
+  "private": true,
+  "description": "Sidera Protocol: a name service for Stellar. Soroban contracts, TypeScript SDK and dashboard.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/sdk",
+    "apps/dashboard"
+  ],
+  "scripts": {
+    "build": "npm run build -w @sidera-protocol/sdk && npm run build -w @sidera-protocol/app",
+    "test": "npm test -w @sidera-protocol/sdk",
+    "lint": "npm run lint -w @sidera-protocol/sdk && npm run build -w @sidera-protocol/sdk && npm run lint -w @sidera-protocol/app"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

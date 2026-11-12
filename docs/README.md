@@ -8,9 +8,9 @@ memo information that exchanges and payment systems may require.
 
 | Repository | Role |
 |---|---|
-| [sidera-contracts](https://github.com/Sidera-Protocol/sidera-contracts) | Soroban registry contracts and on-chain name-resolution rules |
-| [sidera-sdk](https://github.com/Sidera-Protocol/sidera-sdk) | TypeScript client for resolving names and submitting registry transactions |
-| [sidera-app](https://github.com/Sidera-Protocol/sidera-app) | Next.js dashboard for searching, resolving, and claiming `.sid` names |
+| [`contracts/registry`](../contracts/registry) | Soroban registry contracts and on-chain name-resolution rules |
+| [`packages/sdk`](../packages/sdk) | TypeScript client for resolving names and submitting registry transactions |
+| [`apps/dashboard`](../apps/dashboard) | Next.js dashboard for searching, resolving, and claiming `.sid` names |
 
 The contracts are the source of truth for protocol state. The SDK exposes the
 contract interface to wallets and payment applications, while the dashboard
@@ -42,12 +42,12 @@ repository and its security policy.
   dependency-aware implementation tasks.
 - Issue authors: use the [contributor task template](../.github/ISSUE_TEMPLATE/wave_task.md)
   so each task has an outcome, acceptance criteria, and verification steps.
-- SDK integrators: the [SDK README](https://github.com/Sidera-Protocol/sidera-sdk#readme)
-  and [API reference](https://github.com/Sidera-Protocol/sidera-sdk/blob/main/docs/API.md)
+- SDK integrators: the [SDK README](../packages/sdk/README.md)
+  and [API reference](../packages/sdk/docs/API.md)
   for installation, reads, writes, signing, name validation, and reverse
   resolution. The SDK must remain aligned with the deployed registry ABI.
-- Application developers: the [dashboard README](https://github.com/Sidera-Protocol/sidera-app#readme)
-  and [troubleshooting guide](https://github.com/Sidera-Protocol/sidera-app/blob/main/docs/TROUBLESHOOTING.md)
+- Application developers: the [dashboard README](../apps/dashboard/README.md)
+  and [troubleshooting guide](../apps/dashboard/docs/TROUBLESHOOTING.md)
   for local setup, environment variables, and the testnet demo.
 - Contributors: start with the relevant repository's `CONTRIBUTING.md`, then
   choose an issue with acceptance criteria and verification steps.

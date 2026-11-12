@@ -1,0 +1,43 @@
+{
+  "name": "@sidera-protocol/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for the Sidera Stellar Name Service — resolve names to addresses with memo hints",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "name-service",
+    "memo",
+    "blockchain",
+    "sdk"
+  ],
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

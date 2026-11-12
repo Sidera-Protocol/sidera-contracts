@@ -15,9 +15,9 @@ the maintainers.
    assignment** before starting.
 2. **Fork & branch** — fork the repo, then:
    ```bash
-   git clone https://github.com/<your-user>/sidera-contracts.git
-   cd sidera-contracts
-   git remote add upstream https://github.com/Sidera-Protocol/sidera-contracts.git
+   git clone https://github.com/<your-user>/sidera-protocol.git
+   cd sidera-protocol
+   git remote add upstream https://github.com/Sidera-Protocol/sidera-protocol.git
    git checkout -b feat/my-feature upstream/main
    ```
 3. **Develop** — keep the PR focused on one issue.
@@ -35,7 +35,7 @@ Some integration-style messages are asserted from serialized contract test
 snapshots under `contracts/registry/test_snapshots/tests/`. If a change
 must update a snapshot, do it explicitly and explain why in the PR, rather
 than silently re-baselining messages that other tooling may already rely on.
-5. **Open a PR** against `Sidera-Protocol/sidera-contracts:main` with
+5. **Open a PR** against `Sidera-Protocol/sidera-protocol:main` with
    `Closes #<issue-number>` in the description (the PR template prompts
    for it).
 

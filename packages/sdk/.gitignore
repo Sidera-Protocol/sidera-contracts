@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+.env
+*.tsbuildinfo
+.DS_Store
+sidera-protocol-sdk-*.tgz

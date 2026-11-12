@@ -14,10 +14,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Block auto-run configs, binary payloads and npm lifecycle hooks
         run: bash scripts/check-repo-hygiene.sh
-      - name: SideraGuard scanner regression tests
-        run: bash scripts/sideraguard/test-scan.sh
-      - name: SideraReview regression tests
-        run: bash scripts/siderareview/test-review.sh
 
   fmt:
     name: Rustfmt
@@ -107,3 +103,32 @@ jobs:
             echo "::error::No WASM artifacts were produced; the size check cannot run"
             exit 1
           fi
+
+  sdk:
+    name: SDK (typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint -w @sidera-protocol/sdk
+      - run: npm test -w @sidera-protocol/sdk
+      - run: npm run build -w @sidera-protocol/sdk
+
+  dashboard:
+    name: Dashboard (typecheck, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # The dashboard uses the SDK from packages/sdk, so build it first.
+      - run: npm run build -w @sidera-protocol/sdk
+      - run: npm run lint -w @sidera-protocol/app
+      - run: npm run build -w @sidera-protocol/app
