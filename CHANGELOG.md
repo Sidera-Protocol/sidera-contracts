@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Each owner's names on-chain:** `names_of(owner)` lists the names an owner
+  holds with their expiry (at most 100 per owner). SDK: `namesOf`. The
+  dashboard's "my names" now reads it, so it works from any device instead of
+  only the browser that registered the names.
+- **Admin upgrades:** `upgrade(wasm_hash)` replaces the contract code and keeps
+  the contract ID and every name. Proven on testnet: a non-admin upgrade was
+  refused, and all state survived an admin upgrade.
+- **Testnet deployment** `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT`
+  (supersedes `CASYF…ZTNIT`); receipt in `docs/testnet-smoke-receipt.json`.
+- Property test P5: owner lists always match who holds what.
 - **Paid registration, renewal and expiry.** Names are registered for 1–10
   years and paid in a SEP-41 token to a treasury, at a yearly price by name
   length. Expired names stop resolving; for 30 days only renewal is possible,
@@ -31,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contract WASM budget in CI raised to 48 KiB (39,829 bytes; 31,244 optimized).
 
 ### Fixed
+- The SDK decoded every list as an optional value and kept only the first
+  item, so multi-name results would have been cut to one.
+- Transferring a name to oneself dropped it from the owner's list (found by
+  P5 before release).
 - **Primary-name spoofing:** `set_primary_name` accepted any name, so an
   address could display a name it did not own. It now requires the name to be
   active, owned by the address and resolving to it, and `primary_name` stops

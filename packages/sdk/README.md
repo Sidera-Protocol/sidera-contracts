@@ -51,10 +51,10 @@ The current contract (paid registration, renewals and expiry) is deployed on
 Stellar testnet at:
 
 ```text
-CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT
+CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT
 ```
 
-Explorer: <https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT>
+Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>
 
 This SDK was used to verify that deployment end to end: register, resolve with
 a memo, renew, set and read a primary name, and refused impostor and duplicate

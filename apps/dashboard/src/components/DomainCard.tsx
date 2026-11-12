@@ -44,15 +44,22 @@ export default function DomainCard({
   onRenew?: () => void;
   renewing?: boolean;
 }) {
+  const expired = record.expiresAt != null && record.expiresAt.getTime() < Date.now();
   return (
     <article className="rounded-2xl border border-space-800 bg-space-900 p-6">
       <header className="mb-5 flex items-center justify-between">
         <h2 className="font-mono text-2xl font-semibold text-white">
           {record.fullName}
         </h2>
-        <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> registered
-        </span>
+        {expired ? (
+          <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs text-amber-400">
+            expired, renew to keep it
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> registered
+          </span>
+        )}
       </header>
 
       <dl className="grid gap-4 sm:grid-cols-2">
@@ -64,7 +71,7 @@ export default function DomainCard({
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           {record.expiresAt && (
             <p className="text-sm text-gray-400">
-              Registered until{" "}
+              {expired ? "Expired on" : "Registered until"}{" "}
               <span className="text-gray-200">
                 {record.expiresAt.toLocaleDateString(undefined, { dateStyle: "long" })}
               </span>

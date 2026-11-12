@@ -2,14 +2,14 @@
 
 The evidence that Sidera's registry, SDK and dashboard work together on
 Stellar testnet: paid registration, renewal, expiry, resolution with memo
-hints, and verified primary names.
+hints, verified primary names, owner name lists and admin upgrades.
 
 ## Live testnet proof
 
 - Network: Stellar testnet
-- Contract: `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT`
-- Explorer: <https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT>
-- WASM SHA-256 (deployed, optimized): `a7fbcce4832820080099e0e9fe4e69f8ef1d6cac084a0b0dd9ad455b478e34fb`
+- Contract: `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT`
+- Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>
+- WASM SHA-256 (deployed, optimized): `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6`
 - Payment token: native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ characters
 
 The [smoke receipt](testnet-smoke-receipt.json) records every step with its
@@ -28,16 +28,22 @@ contract:
 7. the second account tried to claim `alice-pay` as **its** primary name and
    was refused (`UnauthorizedError`);
 8. registering the taken name again was refused (`NameTakenError`);
-9. the expiry read back as 2029-11-11, and the name was not available.
+9. the owner's names were listed straight from the registry (`namesOf`);
+10. the expiry read back as 2029-11-11, and the name was not available;
+11. a non-admin's upgrade was refused (it needs the admin's signature);
+12. the admin upgraded the contract, and afterwards the name, its memo, the
+    owner's list, the primary name and the name count were all unchanged.
 
 ## Contract and repository verification
 
-- Contract: 63 tests, including 20 for pricing, expiry, grace period,
-  renewal and admin rules, and four property-based suites. The newest (P4)
-  checks over random sequences of registrations, renewals and time jumps
-  that the treasury receives exactly the quoted prices, no token is created
-  or lost, failed calls move no money, and no expiry exceeds 10 years ahead.
-- SDK: 51 tests, with fixtures that use the contract's real encodings.
+- Contract: 72 tests, including 20 for pricing, expiry, grace period,
+  renewal and admin rules, 8 for owner name lists and upgrades, and five
+  property-based suites. P4 checks over random sequences of registrations,
+  renewals and time jumps that the treasury receives exactly the quoted
+  prices, no token is created or lost, failed calls move no money, and no
+  expiry exceeds 10 years ahead. P5 checks that every owner's list always
+  matches who holds what; it found a self-transfer bug before release.
+- SDK: 53 tests, with fixtures that use the contract's real encodings.
 - Dashboard: typecheck and production build; search, expiry display and live
   price quotes checked in a browser against the testnet contract.
 - CI runs all of the above on every pull request.
@@ -54,7 +60,9 @@ covered by the receipt above:
   rejects; it is now `Void` or the plain string;
 - the SDK submitted transactions without preparing them (footprint,
   authorization, resource fee) and did not wait for confirmation; it now
-  prepares, submits and awaits each write.
+  prepares, submits and awaits each write;
+- the SDK decoded every list as if it were an optional value and kept only
+  its first item; lists now decode in full.
 
 The dashboard's registration button was also a placeholder that reported
 success without sending a transaction. It now registers through the SDK with

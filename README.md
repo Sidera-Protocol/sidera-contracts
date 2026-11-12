@@ -28,12 +28,12 @@ resolution.
 
 | Part | What works today |
 |---|---|
-| Registry contract (`contracts/registry`) | Yearly registration paid in a SEP-41 token (price by name length), `renew` (anyone may pay), expiry with a 30-day grace period, `resolve` with memo hints, `set_address`, `transfer`, verified primary names (`set_primary_name` / `primary_name`), admin-set prices and treasury. Deployed on testnet. |
-| TypeScript SDK (`packages/sdk`) | Every contract call, including `register` (with years), `renew`, `expiresAt`, `price`, `isAvailable` and `config`. Writes are simulated, signed, submitted and confirmed; proven end to end on testnet. |
-| Dashboard (`apps/dashboard`) | Search and resolve names, see when they expire, register with Freighter for 1–10 years at the live on-chain price, renew, and set a primary name. |
+| Registry contract (`contracts/registry`) | Yearly registration paid in a SEP-41 token (price by name length), `renew` (anyone may pay), expiry with a 30-day grace period, `resolve` with memo hints, `set_address`, `transfer`, verified primary names (`set_primary_name` / `primary_name`), each owner's name list (`names_of`), admin-set prices and treasury, and admin `upgrade` that keeps the contract ID and every name. Deployed on testnet. |
+| TypeScript SDK (`packages/sdk`) | Every contract call, including `register` (with years), `renew`, `namesOf`, `expiresAt`, `price`, `isAvailable` and `config`. Writes are simulated, signed, submitted and confirmed; proven end to end on testnet. |
+| Dashboard (`apps/dashboard`) | Search and resolve names, see when they expire, register with Freighter for 1–10 years at the live on-chain price, see every name you own (read from the registry, on any device), renew, and set a primary name. |
 
-Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): subnames, an
-indexer, a mainnet deployment and an independent audit.
+Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): subnames,
+profile records, a mainnet deployment and an independent audit.
 
 ## Documentation
 
@@ -69,17 +69,18 @@ dashboard screen land in the same pull request.
 | Item | Value |
 |---|---|
 | Network | Stellar **Testnet** |
-| Deployed | 2026-11-12 (pricing, renewals and expiry) |
-| Contract ID | `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT` |
-| WASM sha256 | `a7fbcce4832820080099e0e9fe4e69f8ef1d6cac084a0b0dd9ad455b478e34fb` (31,244 bytes, `stellar contract optimize` of revision `ec3300d`) |
+| Deployed | 2026-11-12 (pricing, renewals, expiry, owner name lists, admin upgrades) |
+| Contract ID | `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT` |
+| WASM sha256 | `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6` (34,483 bytes, `stellar contract optimize` of revision `3e83b3f`) |
 | Payment | Native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ character names (testnet demo prices) |
-| Live round-trip | Through the SDK: register for 2 years (treasury received 4 XLM) → resolve with memo → renewal paid by another account (+2 XLM, owner unchanged) → primary name → an impostor's primary-name claim refused → duplicate registration refused |
+| Live round-trip | Through the SDK: register for 2 years (treasury received 4 XLM) → resolve with memo → renewal paid by another account (+2 XLM, owner unchanged) → primary name → an impostor's primary-name claim refused → duplicate registration refused → the owner's names listed from the registry. Then: a non-admin upgrade refused, an admin upgrade applied, and every name, list and primary name unchanged afterwards. |
 
 Every transaction is linked in the [smoke receipt](docs/testnet-smoke-receipt.json).
-Explorer: <https://lab.stellar.org/r/testnet/contract/CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT>
+Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>
 
-The earlier free-registration deployment (`CCZJ…H7PC`, 2026-10-14) is recorded
-in [its own receipt](docs/testnet-smoke-receipt-2026-10-14.json).
+Earlier deployments are listed in the receipt; the free-registration one
+(`CCZJ…H7PC`, 2026-10-14) has [its own receipt](docs/testnet-smoke-receipt-2026-10-14.json).
+From this deployment on, changes ship through `upgrade`, keeping the contract ID.
 
 > The registry is deployed on **Stellar testnet only** — no mainnet
 > deployment exists. Do not send real funds based on name resolution until a

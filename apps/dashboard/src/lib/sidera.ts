@@ -95,12 +95,10 @@ export async function quotePrice(name: string, years: number): Promise<{ amount:
 export async function registerName(owner: string, name: string, years: number): Promise<Date> {
   if (DEMO_MODE) {
     await new Promise((r) => setTimeout(r, 900));
-    rememberRegistration(name);
     return new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000);
   }
   const client = await writeClient(owner);
   const { expiresAt } = await client.register({ name, owner, address: owner, years });
-  rememberRegistration(name);
   return expiresAt;
 }
 
@@ -203,30 +201,37 @@ export async function namesOwnedBy(owner: string): Promise<NameRecordView[]> {
       }));
   }
 
+  // The registry keeps each owner's list of names (`names_of`), so this works
+  // from any browser. Names in their grace period no longer resolve; they are
+  // still shown so their owner can renew them.
   const client = await readClient();
-  // Owner-listing requires the contract's enumeration tranche (tracked in
-  // the issue ladder). Until then, live mode checks the local registration
-  // log kept by this client — names registered from this browser resolve
-  // correctly; otherwise the dashboard points contributors at the ladder.
-  const tracked = localRegistrationLog();
+  const owned = await client.namesOf(owner);
   const results: NameRecordView[] = [];
-  for (const name of tracked) {
+  for (const { name, expiresAt } of owned) {
     try {
-      const nameOwner = await client.ownerOf(name);
-      if (nameOwner !== owner) continue;
-      const [res, expiresAt] = await Promise.all([client.resolve(name), client.expiresAt(name)]);
+      const res = await client.resolve(name);
       results.push({
         name: res.name,
         fullName: res.fullName,
-        owner: nameOwner,
+        owner,
         address: res.address,
         memo: res.memo,
         source: "chain",
         available: false,
         expiresAt,
       });
-    } catch {
-      // Name since expired or removed — drop from the log on read.
+    } catch (err) {
+      if (!(err instanceof Error && /has expired|NameExpired/i.test(err.message))) throw err;
+      results.push({
+        name,
+        fullName: `${name}.sid`,
+        owner,
+        address: "expired: renew to restore resolution",
+        memo: null,
+        source: "chain",
+        available: false,
+        expiresAt,
+      });
     }
   }
   return results;
@@ -259,22 +264,4 @@ export async function setPrimaryName(address: string, name: string): Promise<voi
   await client.setPrimaryName(address, name);
 }
 
-const LOG_KEY = "sidera:my-names";
 const PRIMARY_NAME_KEY = "sidera:primary-name";
-
-function localRegistrationLog(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(LOG_KEY) ?? "[]") as string[];
-  } catch {
-    return [];
-  }
-}
-
-export function rememberRegistration(name: string): void {
-  if (typeof window === "undefined") return;
-  const log = localRegistrationLog();
-  if (!log.includes(name)) {
-    window.localStorage.setItem(LOG_KEY, JSON.stringify([...log, name]));
-  }
-}

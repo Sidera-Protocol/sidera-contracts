@@ -45,6 +45,11 @@ Returns the current owner address. A missing name raises
 
 Returns whether the name is taken: active or in its 30-day grace period.
 
+### `namesOf(owner)`
+
+Returns `[{ name, expiresAt }]`: the names the address holds (active or in
+their grace period), read from the registry, in registration order.
+
 ### `expiresAt(name)`
 
 Returns when the name expires, as a `Date`. Works while the name is active and

@@ -38,7 +38,7 @@ entrypoints directly:
 ```typescript
 import { contract } from "@stellar/stellar-sdk";
 
-const REGISTRY_ID = "CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT";
+const REGISTRY_ID = "CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
@@ -66,7 +66,7 @@ The same call from the CLI (useful for smoke-testing a deployment):
 
 ```bash
 stellar contract invoke \
-  --id CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT \
+  --id CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT \
   --network testnet --source <any-identity> --send no \
   -- resolve --name alice-pay
 ```

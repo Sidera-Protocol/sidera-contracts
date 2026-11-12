@@ -1,7 +1,7 @@
 // End-to-end smoke test of a deployed Sidera registry, driven by the SDK.
 //
 // Registers a name for 2 years, resolves it, renews it from a second account,
-// sets a primary name, and checks that an impostor's primary-name claim and a
+// sets a primary name, lists the owner's names, and checks that an impostor's primary-name claim and a
 // duplicate registration are refused. Writes a receipt with every transaction.
 //
 // Needs four funded Stellar CLI identities (sidera-admin, sidera-treasury,
@@ -59,6 +59,9 @@ catch (e) { step("impostor cannot claim someone else's name as primary", { refus
 
 try { await asBob.register({ name, owner: BOB, address: BOB }); step("UNEXPECTED: duplicate register accepted", {}); }
 catch (e) { step("taken name cannot be registered again", { refusedWith: e.constructor.name, ok: e instanceof NameTakenError }); }
+
+const held = await asBob.namesOf(ALICE);
+step("names held by the owner, read from the registry", { names: held.map((n) => ({ name: n.name, expiresAt: n.expiresAt.toISOString() })), includesName: held.some((n) => n.name === name) });
 
 step("expiry read back", { expiresAt: (await asAlice.expiresAt(name)).toISOString(), available: await asAlice.isAvailable(name) });
 writeFileSync(process.argv[2] ?? "testnet-smoke-output.json", JSON.stringify(receipt, (k, v) => typeof v === "bigint" ? v.toString() : v, 2));
