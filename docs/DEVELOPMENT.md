@@ -29,13 +29,13 @@ resolver output should include focused tests.
 
 ## SDK checks
 
-From `sidera-sdk`:
+From the repository root:
 
 ```bash
-pnpm install
-pnpm lint
-pnpm test
-pnpm build
+npm ci --ignore-scripts
+npm run lint -w @sidera-protocol/sdk
+npm test -w @sidera-protocol/sdk
+npm run build -w @sidera-protocol/sdk
 ```
 
 The SDK should be checked whenever the contract interface, error codes,
@@ -43,12 +43,14 @@ resolution shape, memo rules, or transaction parameters change.
 
 ## Dashboard checks
 
-From `sidera-app`:
+From the repository root (the dashboard uses the SDK from `packages/sdk`, so
+build the SDK first):
 
 ```bash
-npm install
-npm run lint
-npm run build
+npm ci --ignore-scripts
+npm run build -w @sidera-protocol/sdk
+npm run lint -w @sidera-protocol/app
+npm run build -w @sidera-protocol/app
 ```
 
 For wallet or network changes, also verify the testnet flow manually with a

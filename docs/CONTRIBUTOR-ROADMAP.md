@@ -12,7 +12,7 @@ These tasks are complete and provide the baseline for the coordinated release.
 
 **Status:** Complete (`06b8e87`)
 
-**Repository:** `sidera-sdk`  
+**Area:** `packages/sdk`  
 **Depends on:** deployed registry ABI and contract tests  
 **Outcome:** SDK consumers can call `primaryName(address)` and
 `setPrimaryName(address, name)`.
@@ -30,7 +30,7 @@ These tasks are complete and provide the baseline for the coordinated release.
 
 **Status:** Complete (`68abed1`)
 
-**Repository:** `sidera-app`  
+**Area:** `apps/dashboard`  
 **Depends on:** SDK reverse-resolution parity  
 **Outcome:** a connected wallet can view and set its preferred `.sid` name.
 
@@ -47,7 +47,7 @@ These tasks are complete and provide the baseline for the coordinated release.
 
 **Status:** Complete; see [`testnet-smoke-receipt.json`](testnet-smoke-receipt.json)
 
-**Repository:** `sidera-contracts`  
+**Area:** `contracts/registry`  
 **Depends on:** stable contract ABI  
 **Outcome:** a clean checkout can verify the complete protocol path.
 
@@ -66,7 +66,7 @@ These tasks are complete and provide the baseline for the coordinated release.
 
 ### 4. Memo-safe payment example
 
-**Repository:** `sidera-sdk` or a dedicated example package  
+**Area:** `packages/sdk` or a dedicated example package  
 **Outcome:** a Stellar payment integration demonstrates that a required memo
 cannot be silently dropped.
 
@@ -79,7 +79,7 @@ cannot be silently dropped.
 
 ### 5. Event and resolution fixtures
 
-**Repository:** `sidera-contracts`  
+**Area:** `contracts/registry`  
 **Outcome:** downstream indexers and SDK maintainers have stable fixtures for
 registry events and resolution responses.
 

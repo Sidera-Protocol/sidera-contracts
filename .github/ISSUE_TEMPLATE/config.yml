@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question / discussion
-    url: https://github.com/Sidera-Protocol/sidera-contracts/discussions
+    url: https://github.com/Sidera-Protocol/sidera-protocol/discussions
     about: Ask before building large unrequested features
   - name: Security report
-    url: https://github.com/Sidera-Protocol/sidera-contracts/security/advisories/new
+    url: https://github.com/Sidera-Protocol/sidera-protocol/security/advisories/new
     about: Report vulnerabilities privately — never in public issues

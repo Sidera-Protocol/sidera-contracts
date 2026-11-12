@@ -60,7 +60,7 @@ docs/                # Protocol docs, resolver interface, integration guide
 ```
 
 The SDK, dashboard and contracts used to live in three repositories
-(`sidera-sdk`, `sidera-app`, `sidera-contracts`). They now share one
+(`sidera-sdk`, `sidera-app`, `sidera-contracts`). They now share this one
 repository, history included, so a contract change, its SDK support and its
 dashboard screen land in the same pull request.
 

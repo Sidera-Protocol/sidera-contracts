@@ -1,14 +1,14 @@
 # Release and compatibility policy
 
-Sidera is one protocol delivered through three repositories:
+Sidera is one protocol delivered in three parts of this repository:
 
-| Repository | Responsibility |
+| Part | Responsibility |
 |---|---|
-| `sidera-contracts` | Canonical Soroban registry state and ABI |
-| `sidera-sdk` | Typed client, validation, decoding, and transaction helpers |
-| `sidera-app` | User-facing dashboard and wallet integration |
+| `contracts/registry` | Canonical Soroban registry state and ABI |
+| `packages/sdk` | Typed client, validation, decoding, and transaction helpers |
+| `apps/dashboard` | User-facing dashboard and wallet integration |
 
-The contract repository is the source of truth. A contract interface change is
+The contract is the source of truth. A contract interface change is
 not complete until the SDK and dashboard have either been updated or have
 explicitly documented why they remain compatible.
 
