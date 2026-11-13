@@ -6,41 +6,40 @@
  */
 
 import { Memo } from "@stellar/stellar-sdk";
+import { SideraError } from "./errors.js";
 import type { ParsedMemo } from "./types.js";
 
-/** Extract a parsed memo from a raw registry string. */
-export function parseMemoHint(raw: string | null | undefined): ParsedMemo | null {
-  if (raw == null) {
-    return null;
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    return null;
-  }
-  // Pure digits → MEMO_ID (the dominant exchange convention).
-  if (/^\d{1,20}$/.test(trimmed)) {
-    return { type: "id", value: trimmed };
-  }
-  // Anything else → MEMO_TEXT (max 28 bytes per Stellar protocol).
-  if (Buffer.byteLength(trimmed, "utf8") > 28) {
-    return { type: "text", value: truncateUtf8(trimmed, 28) };
-  }
-  return { type: "text", value: trimmed };
-}
+/** Stellar's MEMO_TEXT limit, in bytes. */
+export const MAX_MEMO_TEXT_BYTES = 28;
+const U64_MAX = 18446744073709551615n;
 
-/** Byte-aware truncation: never splits a multi-byte character mid-sequence. */
-function truncateUtf8(value: string, maxBytes: number): string {
-  let out = "";
-  let used = 0;
-  for (const ch of value) {
-    const size = Buffer.byteLength(ch, "utf8");
-    if (used + size > maxBytes) {
-      break;
-    }
-    out += ch;
-    used += size;
+/**
+ * Turn a registry memo hint into the exact memo to attach.
+ *
+ * The memo must reach the destination **exactly as stored**: a changed deposit
+ * memo credits the wrong customer or none. So this never trims, never drops
+ * leading zeros, and never shortens:
+ * - a plain number without leading zeros that fits a u64 → `MEMO_ID`
+ * - anything else that fits 28 bytes → `MEMO_TEXT`, byte for byte
+ * - longer than 28 bytes → throws `MemoTooLong`; the payment must not be sent
+ *
+ * @throws `SideraError` with code `MemoTooLong`.
+ */
+export function parseMemoHint(raw: string | null | undefined): ParsedMemo | null {
+  if (raw == null || raw.length === 0) {
+    return null;
   }
-  return out;
+  if (/^(0|[1-9]\d{0,19})$/.test(raw) && BigInt(raw) <= U64_MAX) {
+    return { type: "id", value: raw };
+  }
+  if (Buffer.byteLength(raw, "utf8") > MAX_MEMO_TEXT_BYTES) {
+    throw new SideraError(
+      "MemoTooLong",
+      `This destination's memo is longer than ${MAX_MEMO_TEXT_BYTES} bytes, so it cannot be ` +
+        "attached without changing it. Do not send: ask the recipient for a valid memo.",
+    );
+  }
+  return { type: "text", value: raw };
 }
 
 /**

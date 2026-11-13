@@ -1,5 +1,5 @@
 /**
- * Typed errors mirroring the on-chain `RegistryError` enum (codes 1–10) plus
+ * Typed errors mirroring the on-chain `RegistryError` enum (codes 1–11) plus
  * client-side failures. Mapping contract errors to classes keeps wallet and
  * app code off string matching.
  */
@@ -45,7 +45,7 @@ export class NameExpiredError extends SideraError {
   }
 }
 
-/** Map an on-chain error code (1–10) to a typed error. */
+/** Map an on-chain error code (1–11) to a typed error. */
 export function errorFromCode(code: number, name: string): SideraError {
   switch (code) {
     case 1:
@@ -68,6 +68,8 @@ export function errorFromCode(code: number, name: string): SideraError {
       return new SideraError("PeriodTooLong", `Renewing "${name}" would go more than 10 years ahead`);
     case 10:
       return new SideraError("TooManyNames", "This owner already holds the maximum of 100 names");
+    case 11:
+      return new SideraError("InvalidMemo", "A memo must be 1 to 28 bytes, the size of a Stellar text memo");
     default:
       return new SideraError(`Unknown(${code})`, `Contract error ${code}`);
   }

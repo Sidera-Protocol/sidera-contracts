@@ -34,6 +34,10 @@ export default function Navbar({
         </Link>
 
         <div className="flex items-center gap-3">
+          <nav className="hidden items-center gap-4 text-sm text-gray-400 sm:flex" aria-label="Main">
+            <Link href="/send" className="hover:text-white">Send</Link>
+            <Link href="/dashboard" className="hover:text-white">My names</Link>
+          </nav>
           {/* Network selector */}
           <label className="sr-only" htmlFor="network-select">
             Network

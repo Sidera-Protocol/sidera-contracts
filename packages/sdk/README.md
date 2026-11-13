@@ -78,6 +78,31 @@ Wallets: feed `res.memo` straight into your payment builder —
 **If a memo hint is present, refusing to attach it should be a hard error in
 your send flow** — a memo-less payment to an exchange is a lost payment.
 
+The memo is never trimmed or shortened: digits without a leading zero that
+fit a u64 become `MEMO_ID`, anything else `MEMO_TEXT` byte for byte, and a
+memo that cannot be sent exactly throws `MemoTooLong`.
+
+## Paying a name
+
+`buildPayment` builds the unsigned payment with the destination and the memo
+already set:
+
+```ts
+import { buildPayment } from "@sidera-protocol/sdk";
+
+const to = await client.resolve("exchange-user.sid");
+const tx = buildPayment({
+  source: await horizon.loadAccount(payer), // the paying account
+  to,
+  amount: "10",                             // XLM unless `asset` is given
+  networkPassphrase: Networks.TESTNET,
+});
+// sign with the wallet, then horizon.submitTransaction(...)
+```
+
+Resolve again right before submitting and stop if the address or memo
+changed since the user confirmed them.
+
 Also available: `client.ownerOf(name)`, `client.exists(name)`, and
 `client.primaryName(address)` for reverse resolution.
 

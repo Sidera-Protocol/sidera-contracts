@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pay by name:** the SDK's `buildPayment` turns a resolved name into an
+  unsigned Stellar payment with the destination and the memo already set, so
+  a wallet cannot forget the memo. The dashboard has a **Send** page: look up
+  a name, see the address and the memo that will be attached, and pay with
+  Freighter. It refuses unknown, expired and invalid names, and resolves the
+  name again right before sending, stopping if anything changed. Proven on
+  testnet: `docs/pay-by-name-receipt.json`.
+- SDK error `InvalidMemo` (contract code 11) and `MemoTooLong`.
 - **Each owner's names on-chain:** `names_of(owner)` lists the names an owner
   holds with their expiry (at most 100 per owner). SDK: `namesOf`. The
   dashboard's "my names" now reads it, so it works from any device instead of
@@ -33,6 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testnet deployment** `CASYFSPSR5FOG4CQVUSJ44WYDWOTYD764GWLSMS2GQZIKFRH3ZBZTNIT`,
   exercised end to end through the SDK; see `docs/testnet-smoke-receipt.json`.
 - Property test P4: payments always balance and expiry stays within 10 years.
+
+### Fixed
+- **Memos that cannot be sent are refused when stored.** `register` and
+  `set_address` now reject a memo that is empty or longer than 28 bytes (the
+  size of a Stellar text memo) with `InvalidMemo`. Before, such a memo was
+  stored and wallets either cut it short or failed at payment time, so a
+  deposit could reach an exchange with the wrong memo. Shipped to the testnet
+  contract with `upgrade` (WASM `a80a047aa9e7…`); existing names kept.
+- **The SDK sends memos exactly as stored.** It no longer trims spaces or
+  cuts text memos to fit, keeps leading zeros (`007` goes as text), and sends
+  numbers too large for a memo ID as text. A memo it cannot send exactly
+  raises `MemoTooLong` instead.
+- Property test P6: only memos of 1–28 bytes are ever stored.
 
 ### Changed
 - **One repository.** `sidera-sdk` and `sidera-app` were merged into this

@@ -66,6 +66,10 @@ These tasks are complete and provide the baseline for the coordinated release.
 
 ### 4. Memo-safe payment example
 
+**Status: done.** `buildPayment` in `packages/sdk`, the dashboard's Send page,
+and the live proof in `scripts/pay-by-name-demo.mjs`
+([receipt](pay-by-name-receipt.json)).
+
 **Area:** `packages/sdk` or a dedicated example package  
 **Outcome:** a Stellar payment integration demonstrates that a required memo
 cannot be silently dropped.

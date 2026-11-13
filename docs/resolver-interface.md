@@ -26,6 +26,8 @@ Wallet rules:
    a memo is the #1 way funds are lost on Stellar — Sidera's core reason
    to exist.
 3. Display the resolved G-address alongside the name for verification.
+   Resolve again right before sending and stop if the address or memo
+   changed since the user confirmed them.
 4. Treat `NameExpired` like `NotFound`: never pay an expired name, and never
    fall back to a cached resolution for it.
 
@@ -72,6 +74,16 @@ fn price(env: Env, name: String, years: u32) -> Result<i128, RegistryError>;
   more than 10 years ahead.
 - After expiry the name stops resolving. For 30 days only renewal is
   possible; after that the name is released and anyone may register it.
+
+## Memo rules
+
+- A stored memo is 1–28 bytes, the size of a Stellar text memo. `register`
+  and `set_address` refuse anything else with `InvalidMemo` (code 11), so
+  every stored memo can be sent exactly as written.
+- The registry stores the memo as a string. Wallets choose the Stellar memo
+  type from it: digits with no leading zero that fit in a u64 are sent as
+  `MEMO_ID`; everything else (letters, spaces, leading zeros, larger numbers)
+  as `MEMO_TEXT`, byte for byte. Never trim or shorten a memo.
 
 ## Listing an owner's names
 

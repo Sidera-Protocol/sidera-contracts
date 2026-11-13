@@ -70,6 +70,10 @@ pub enum RegistryError {
     PeriodTooLong = 9,
     /// An owner may hold at most [`MAX_NAMES_PER_OWNER`] names.
     TooManyNames = 10,
+    /// A memo must be 1–[`MAX_MEMO_BYTES`] bytes: the most a Stellar text memo
+    /// can carry. A memo that does not fit would have to be cut, and a cut
+    /// deposit memo sends funds to the wrong customer.
+    InvalidMemo = 11,
 }
 
 /// A resolved payment destination: the address plus an optional memo hint.
@@ -247,6 +251,9 @@ enum DataKey {
     OwnerNames(Address),
 }
 
+/// Longest memo hint, in bytes (the Stellar `MEMO_TEXT` limit).
+pub const MAX_MEMO_BYTES: u32 = 28;
+
 /// Most names one owner may hold. Keeps `names_of` and the index writes cheap.
 pub const MAX_NAMES_PER_OWNER: u32 = 100;
 
@@ -346,6 +353,7 @@ impl SideraRegistry {
     /// * [`RegistryError::InvalidName`] — the name failed validation.
     /// * [`RegistryError::InvalidYears`] — `years` is 0 or above [`MAX_YEARS`].
     /// * [`RegistryError::NameTaken`] — the name is active or in its grace period.
+    /// * [`RegistryError::InvalidMemo`] — the memo is empty or longer than 28 bytes.
     /// * [`RegistryError::ArithmeticOverflow`] — a price or time overflowed.
     pub fn register(
         env: Env,
@@ -357,6 +365,7 @@ impl SideraRegistry {
     ) -> Result<u64, RegistryError> {
         Self::validate_name(&name)?;
         Self::validate_years(years)?;
+        Self::validate_memo(memo.as_ref())?;
         owner.require_auth();
 
         let fresh = match Self::status(&env, &name) {
@@ -554,6 +563,7 @@ impl SideraRegistry {
     /// * [`RegistryError::NotFound`] — the name is not registered, or was released.
     /// * [`RegistryError::NameExpired`] — the name has expired.
     /// * [`RegistryError::Unauthorized`] — `caller` is not the owner.
+    /// * [`RegistryError::InvalidMemo`] — the memo is empty or longer than 28 bytes.
     pub fn set_address(
         env: Env,
         name: String,
@@ -562,6 +572,7 @@ impl SideraRegistry {
         memo: Option<String>,
     ) -> Result<(), RegistryError> {
         caller.require_auth();
+        Self::validate_memo(memo.as_ref())?;
         Self::require_active(&env, &name)?;
         Self::require_owner(&env, &name, &caller)?;
 
@@ -911,6 +922,14 @@ impl SideraRegistry {
         u64::from(years)
             .checked_mul(YEAR_SECONDS)
             .ok_or(RegistryError::ArithmeticOverflow)
+    }
+
+    /// A memo, when present, must fit a Stellar text memo: 1–28 bytes.
+    fn validate_memo(memo: Option<&String>) -> Result<(), RegistryError> {
+        match memo {
+            Some(m) if m.is_empty() || m.len() > MAX_MEMO_BYTES => Err(RegistryError::InvalidMemo),
+            _ => Ok(()),
+        }
     }
 
     fn validate_years(years: u32) -> Result<(), RegistryError> {
