@@ -35,6 +35,8 @@ export default function SendPage() {
         setReview({ name: result.record.name, address: result.record.address, memo: result.record.memo });
       } else if (result.status === "expired") {
         setProblem(`${result.fullName} has expired. Do not send to it.`);
+      } else if (result.status === "missing") {
+        setProblem(`${result.fullName} does not exist. Check the name with the recipient.`);
       } else if (result.status === "available") {
         setProblem(`${result.fullName} is not registered. Check the name with the recipient.`);
       } else {

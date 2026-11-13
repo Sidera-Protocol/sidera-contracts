@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Subnames:** the owner of `alice` can create `pay.alice` with its own
+  address and memo, for free (`set_subname`, `remove_subname`, `subnames`;
+  at most 50 per name). `resolve("pay.alice")` works like any name. Subnames
+  live as long as their parent: they stop while it is expired, come back if
+  it is renewed in time, and are gone for good when the name is released
+  and registered by someone else. Built for exchanges that give every
+  customer a deposit name with that customer's memo.
+- **Profile records:** `set_record` / `records` store public details with a
+  name (`avatar`, `url`, `description`, `com.github`, …; at most 16 per name,
+  values up to 256 bytes). They also reset when a released name is
+  registered by someone else.
+- New error `InvalidRecord` (12) and events `subname_set`, `record_set`.
+- **SDK:** `resolve` accepts `pay.alice.sid`; new `subnames`, `records`,
+  `setSubname`, `removeSubname`, `setRecord`, `parseName` and `validateLabel`.
+- **Dashboard:** search and Send understand subnames; name cards show the
+  profile; "My names" has a panel to add and remove subnames and edit the
+  profile.
+- Shipped to the testnet contract with `upgrade` (WASM `42f55fba36cb…`), and
+  proven live: `docs/subnames-receipt.json`.
 - **Pay by name:** the SDK's `buildPayment` turns a resolved name into an
   unsigned Stellar payment with the destination and the memo already set, so
   a wallet cannot forget the memo. The dashboard has a **Send** page: look up
@@ -56,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Property test P6: only memos of 1–28 bytes are ever stored.
 
 ### Changed
+- The CI WASM size budget is now 64 KiB (raw build: 55,332 bytes; the
+  deployed, optimized contract is 43,167 bytes). Subnames and profiles added
+  about 10 KB; Stellar allows much larger contracts, and the budget still
+  catches unexpected growth.
 - **One repository.** `sidera-sdk` and `sidera-app` were merged into this
   repository (`packages/sdk`, `apps/dashboard`) with their history; it is now
   `Sidera-Protocol/sidera-protocol`. The repository bots moved out.

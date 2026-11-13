@@ -67,3 +67,21 @@ describe("normalizeName", () => {
     expect(normalizeName("alice")).toBe("alice");
   });
 });
+
+describe("subnames", () => {
+  it("validates labels of 1–32 characters", async () => {
+    const { validateLabel } = await import("../src/names.js");
+    for (const ok of ["x", "pay", "a-b", "u42"]) expect(validateLabel(ok)).toEqual({ ok: true });
+    for (const bad of ["", "-", "a-", "-a", "Pay", "p.y", "x".repeat(33)]) expect(validateLabel(bad).ok).toBe(false);
+  });
+
+  it("splits pay.alice into label and parent, and refuses deeper names", async () => {
+    const { parseName } = await import("../src/names.js");
+    expect(parseName("alice")).toEqual({ parent: "alice" });
+    expect(parseName("pay.alice")).toEqual({ label: "pay", parent: "alice" });
+    expect(() => parseName("a.pay.alice")).toThrow(InvalidNameError);
+    expect(() => parseName("pay-.alice")).toThrow(InvalidNameError);
+    expect(() => parseName("pay.al")).toThrow(InvalidNameError);
+    expect(() => parseName(".alice")).toThrow(InvalidNameError);
+  });
+});

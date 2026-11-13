@@ -3,8 +3,9 @@
  * talk to a deployed Sidera registry over Soroban RPC.
  *
  * Read calls (`resolve`, `ownerOf`, `exists`, `primaryName`, `expiresAt`, `isAvailable`,
- * `price`, `config`) simulate the invocation and decode the result. Write calls
- * (`register`, `renew`, `setAddress`, `transfer`, `setPrimaryName`) are simulated to
+ * `price`, `config`, `namesOf`, `subnames`, `records`) simulate the invocation and decode the result. Write calls
+ * (`register`, `renew`, `setAddress`, `transfer`, `setPrimaryName`, `setSubname`,
+ * `removeSubname`, `setRecord`) are simulated to
  * prepare their footprint and fees, signed via the configured signer, submitted, and
  * awaited until the network confirms success or failure.
  *
@@ -31,7 +32,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { errorFromCode, SideraError } from "./errors.js";
-import { assertValidName, normalizeName } from "./names.js";
+import { assertValidName, normalizeName, parseName, validateLabel } from "./names.js";
 import { parseMemoHint } from "./memo.js";
 import type {
   ExpiryResult,
@@ -44,6 +45,8 @@ import type {
   RpcTxOptions,
   SideraConfig,
   SideraSigner,
+  SubnameParams,
+  SubnameRecord,
   TransferParams,
 } from "./types.js";
 
@@ -167,14 +170,16 @@ export class SideraClient {
   // ------------------------------------------------------------------
 
   /**
-   * Resolve a name into a full payment destination: address and parsed
-   * memo hint. Accepts bare names or `name.sid` input.
+   * Resolve a name or subname into a full payment destination: address and
+   * parsed memo hint. Accepts `alice`, `alice.sid`, `pay.alice` and
+   * `pay.alice.sid`.
    *
-   * @throws `NameNotFoundError` when the name is not registered.
+   * @throws `NameNotFoundError` when the name (or subname) does not exist.
+   * @throws `NameExpiredError` when the name, or a subname's parent, expired.
    */
   async resolve(nameInput: string): Promise<ResolutionResult> {
     const name = normalizeName(nameInput);
-    assertValidName(name);
+    parseName(name);
 
     const record = await this.callRead<ContractNameRecord | null>("resolve", [
       scValString(name),
@@ -280,6 +285,37 @@ export class SideraClient {
         fivePlus: BigInt(raw.prices.five_plus),
       },
     };
+  }
+
+  /**
+   * The subnames of `parent` (`pay.alice`, …) with their payment records,
+   * ordered by label. Empty when the parent is not active or has none.
+   */
+  async subnames(parentInput: string): Promise<SubnameRecord[]> {
+    const parent = normalizeName(parentInput);
+    assertValidName(parent);
+    const map = await this.callRead<Record<string, ContractNameRecord> | null>(
+      "subnames",
+      [scValString(parent)],
+      parent,
+    );
+    return Object.entries(map ?? {}).map(([label, r]) => ({
+      label,
+      fullName: `${label}.${parent}.sid`,
+      address: r.address,
+      memo: parseMemoHint(r.memo),
+    }));
+  }
+
+  /**
+   * The profile records of a name (`avatar`, `url`, `com.github`, …).
+   * Empty when the name is not active or has none.
+   */
+  async records(nameInput: string): Promise<Record<string, string>> {
+    const name = normalizeName(nameInput);
+    assertValidName(name);
+    const map = await this.callRead<Record<string, string> | null>("records", [scValString(name)], name);
+    return map ?? {};
   }
 
   /** Return the preferred display name for an address. */
@@ -392,6 +428,70 @@ export class SideraClient {
       "set_primary_name",
       [addressScVal(address), scValString(name)],
       address,
+      name,
+      options,
+    );
+  }
+
+  /**
+   * Create or update the subname `label.parent` with its own payment record.
+   * `caller` must own the active parent and sign. Subnames are free.
+   */
+  async setSubname(params: SubnameParams, caller: string, options: RpcTxOptions = {}): Promise<string> {
+    const parent = normalizeName(params.parent);
+    assertValidName(parent);
+    const label = assertLabel(params.label);
+    return this.submitForHash(
+      "set_subname",
+      [
+        scValString(parent),
+        scValString(label),
+        addressScVal(caller),
+        addressScVal(params.address),
+        scValOptionString(params.memo),
+      ],
+      caller,
+      `${label}.${parent}`,
+      options,
+    );
+  }
+
+  /** Delete the subname `label.parent`. `caller` must own the parent and sign. */
+  async removeSubname(
+    parentInput: string,
+    labelInput: string,
+    caller: string,
+    options: RpcTxOptions = {},
+  ): Promise<string> {
+    const parent = normalizeName(parentInput);
+    assertValidName(parent);
+    const label = assertLabel(labelInput);
+    return this.submitForHash(
+      "remove_subname",
+      [scValString(parent), scValString(label), addressScVal(caller)],
+      caller,
+      `${label}.${parent}`,
+      options,
+    );
+  }
+
+  /**
+   * Set a profile record of a name, or delete it with `value: null`.
+   * `caller` must own the active name and sign.
+   */
+  async setRecord(
+    nameInput: string,
+    key: string,
+    value: string | null,
+    caller: string,
+    options: RpcTxOptions = {},
+  ): Promise<string> {
+    const name = normalizeName(nameInput);
+    assertValidName(name);
+    return this.submitForHash(
+      "set_record",
+      [scValString(name), addressScVal(caller), scValString(key), scValOptionString(value ?? undefined)],
+      caller,
       name,
       options,
     );
@@ -526,6 +626,16 @@ export class SideraClient {
 // --------------------------------------------------------------------
 // ScVal helpers
 // --------------------------------------------------------------------
+
+/** Normalize and validate a subname label. */
+function assertLabel(input: string): string {
+  const label = input.trim().toLowerCase();
+  const check = validateLabel(label);
+  if (!check.ok) {
+    throw new SideraError("InvalidName", `"${label}" is not a valid subname label: ${check.reason}`);
+  }
+  return label;
+}
 
 function scValString(value: string): xdr.ScVal {
   return xdr.ScVal.scvString(value);

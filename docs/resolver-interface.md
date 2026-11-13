@@ -97,6 +97,37 @@ expiry, in registration order. It is kept up to date on registration,
 transfer and re-registration of released names. An owner may hold at most
 100 names (`TooManyNames`, code 10).
 
+## Subnames
+
+```rust
+fn set_subname(env: Env, parent: String, label: String, caller: Address,
+               address: Address, memo: Option<String>) -> Result<(), RegistryError>;
+fn remove_subname(env: Env, parent: String, label: String, caller: Address)
+    -> Result<(), RegistryError>;
+fn subnames(env: Env, parent: String) -> Map<String, Resolution>; // label → record
+```
+
+- `resolve("pay.alice")` returns the subname's own `Resolution`.
+- Only the owner of the active parent may set or remove subnames; they are
+  free. Labels are 1–32 characters of a–z, 0–9 and inner hyphens; one level
+  deep; at most 50 per name (`TooManyNames`).
+- While the parent is expired, its subnames fail with `NameExpired`. If the
+  parent is released and registered again, the earlier subnames are gone.
+
+## Profile records
+
+```rust
+fn set_record(env: Env, name: String, caller: Address, key: String,
+              value: Option<String>) -> Result<(), RegistryError>;
+fn records(env: Env, name: String) -> Map<String, String>;
+```
+
+- Keys are 1–32 bytes of a–z, 0–9, `.` and `-` (suggested: `avatar`, `url`,
+  `description`, `com.github`, `com.x`); values are 1–256 bytes; at most 16
+  records per name. `None` deletes a record. Anything else is
+  `InvalidRecord` (code 12).
+- Records are claims by the name's owner, not verified facts.
+
 ## Upgrades
 
 `upgrade(wasm_hash)` lets the admin replace the contract code with an

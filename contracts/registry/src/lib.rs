@@ -13,17 +13,29 @@
 //! - `register` requires the registering owner, who also pays.
 //! - `renew` requires the payer (anyone may renew a name).
 //! - `set_address` and `transfer` require the current owner of an active name.
+//! - `set_subname`, `remove_subname` and `set_record` require the owner of the
+//!   active (parent) name.
 //! - `set_primary_name` requires the address, which must be the owner of the
 //!   name *and* the address the name resolves to.
 //! - `set_prices`, `set_treasury` and `set_admin` require the admin.
 //! - `upgrade` requires the admin.
 //! - `resolve`, `exists`, `owner_of`, `names_of`, `expires_at`, `is_available`,
-//!   `price`, `config` and `total_names` are read-only.
+//!   `price`, `config`, `total_names`, `subnames` and `records` are read-only.
+//!
+//! Subnames: the owner of `alice` can create `pay.alice` (one level deep) with
+//! its own payment record, for free. A subname resolves while its parent is
+//! active and dies with the parent's registration: if the parent is released
+//! and registered again, the previous owner's subnames and profile records no
+//! longer exist.
 //!
 //! Events (topics: event symbol + name; data in parentheses):
 //! - `registered(name)` — `(owner, address, memo, expires_at)` — a name was registered.
 //! - `renewed(name)` — `(payer, years, expires_at, amount)` — a name was renewed.
 //! - `address_set(name)` — `(caller, address, memo)` — the payment record changed.
+//! - `subname_set(parent)` — `(label, caller, record)` — a subname was set, or
+//!   deleted (`record` is `None`).
+//! - `record_set(name)` — `(caller, key, value)` — a profile record was set
+//!   (`value` is `None` when it was deleted).
 //! - `transferred(name)` — `(caller, new_owner)` — ownership moved.
 //! - `primary_name_set(address)` — `(address, name)` — an address set a display name.
 //! - `prices_set()` — `(three, four, five_plus)` — the admin changed prices.
@@ -42,8 +54,40 @@ extern crate std;
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
-    token::TokenClient, Address, BytesN, Env, String, Vec,
+    token::TokenClient, Address, BytesN, Env, IntoVal, Map, String, TryFromVal, Val, Vec,
 };
+
+/// Copying short strings into fixed buffers, without an allocator.
+mod alloc_free {
+    use soroban_sdk::String;
+
+    /// Longest string handled: a 32-byte label, a dot and a 32-byte parent.
+    pub const MAX: usize = 65;
+
+    pub struct Buf {
+        data: [u8; MAX],
+        len: usize,
+    }
+
+    impl Buf {
+        pub fn from(s: &String) -> Self {
+            let mut data = [0u8; MAX];
+            let len = (s.len() as usize).min(MAX);
+            if len == s.len() as usize {
+                s.copy_into_slice(&mut data[..len]);
+            } else {
+                // Too long to be a valid name: keep a marker that never validates.
+                data[0] = b'.';
+                return Buf { data, len: 1 };
+            }
+            Buf { data, len }
+        }
+
+        pub fn as_slice(&self) -> &[u8] {
+            &self.data[..self.len]
+        }
+    }
+}
 
 /// Errors for the Sidera registry.
 #[contracterror]
@@ -74,6 +118,9 @@ pub enum RegistryError {
     /// can carry. A memo that does not fit would have to be cut, and a cut
     /// deposit memo sends funds to the wrong customer.
     InvalidMemo = 11,
+    /// A profile record key or value failed validation, or the name already
+    /// has [`MAX_RECORDS`] records.
+    InvalidRecord = 12,
 }
 
 /// A resolved payment destination: the address plus an optional memo hint.
@@ -229,6 +276,39 @@ pub struct OwnershipTransferred {
     pub new_owner: Address,
 }
 
+/// Emitted when a subname is created, updated or deleted. Topics:
+/// `("subname_set", parent)`; data (in order): `label`, `caller`, `record`
+/// (`None` when the subname was deleted).
+#[contractevent(topics = ["subname_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubnameSet {
+    /// The parent name, e.g. `alice` for `pay.alice`.
+    #[topic]
+    pub parent: String,
+    /// The subname's label, e.g. `pay`.
+    pub label: String,
+    /// The parent's owner, who made the change.
+    pub caller: Address,
+    /// The new payment record, or `None` if the subname was deleted.
+    pub record: Option<Resolution>,
+}
+
+/// Emitted when a profile record changes. Topics: `("record_set", name)`;
+/// data (in order): `caller`, `key`, `value` (`None` when deleted).
+#[contractevent(topics = ["record_set"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordSet {
+    /// The name whose profile changed.
+    #[topic]
+    pub name: String,
+    /// The owner that made the change.
+    pub caller: Address,
+    /// The record key, e.g. `avatar`.
+    pub key: String,
+    /// The new value, or `None` if the record was deleted.
+    pub value: Option<String>,
+}
+
 /// Storage keys.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -249,6 +329,15 @@ enum DataKey {
     /// (expired and released, or re-registered by someone else); reads
     /// filter them out and writes prune them.
     OwnerNames(Address),
+    /// How many times `String` name has been registered: its registration's
+    /// stamp. Absent (read as 0) for names registered before subnames existed.
+    Epoch(String),
+    /// Subnames of `String` name's registration `u32` (its epoch): label →
+    /// payment record. When the name is registered again the epoch changes,
+    /// so the previous registration's subnames are no longer found.
+    Subnames(String, u32),
+    /// Profile records of `String` name's registration `u32`: key → value.
+    Records(String, u32),
 }
 
 /// Longest memo hint, in bytes (the Stellar `MEMO_TEXT` limit).
@@ -256,6 +345,15 @@ pub const MAX_MEMO_BYTES: u32 = 28;
 
 /// Most names one owner may hold. Keeps `names_of` and the index writes cheap.
 pub const MAX_NAMES_PER_OWNER: u32 = 100;
+
+/// Most subnames one name may have.
+pub const MAX_SUBNAMES: u32 = 50;
+/// Most profile records one name may have.
+pub const MAX_RECORDS: u32 = 16;
+/// Longest profile record key, in bytes (a–z, 0–9, `.`, `-`).
+pub const MAX_RECORD_KEY_BYTES: u32 = 32;
+/// Longest profile record value, in bytes.
+pub const MAX_RECORD_VALUE_BYTES: u32 = 256;
 
 /// Seconds in a (365-day) registration year.
 pub const YEAR_SECONDS: u64 = 31_536_000;
@@ -395,11 +493,15 @@ impl SideraRegistry {
         // nothing below is written.
         Self::collect(&env, &owner, amount);
 
+        let epoch = Self::epoch(&env, &name)
+            .checked_add(1)
+            .ok_or(RegistryError::ArithmeticOverflow)?;
         let record = Resolution { address, memo };
         let storage = env.storage().persistent();
         storage.set(&DataKey::Name(name.clone()), &record);
         storage.set(&DataKey::Owner(name.clone()), &owner);
         storage.set(&DataKey::Expiry(name.clone()), &expires_at);
+        storage.set(&DataKey::Epoch(name.clone()), &epoch);
         Self::bump_name(&env, &name);
 
         if fresh {
@@ -545,6 +647,14 @@ impl SideraRegistry {
     /// * [`RegistryError::NameExpired`] — the name has expired. Wallets must
     ///   not send to an expired name.
     pub fn resolve(env: Env, name: String) -> Result<Resolution, RegistryError> {
+        if let Some((label, parent)) = Self::split(&env, &name) {
+            Self::require_active(&env, &parent)?;
+            let found = Self::subname_map(&env, &parent)
+                .get(label)
+                .ok_or(RegistryError::NotFound)?;
+            Self::touch_name(&env, &parent);
+            return Ok(found);
+        }
         Self::require_active(&env, &name)?;
         let record: Resolution = env
             .storage()
@@ -774,6 +884,162 @@ impl SideraRegistry {
         out
     }
 
+    /// Create or update the subname `label.parent` (for example `pay.alice`)
+    /// with its own payment record. Only the owner of the active parent may,
+    /// and subnames are free.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::InvalidName`] — `label` is not 1–32 characters of
+    ///   a–z, 0–9 and inner hyphens.
+    /// * [`RegistryError::InvalidMemo`] — the memo is empty or longer than 28 bytes.
+    /// * [`RegistryError::NotFound`] / [`RegistryError::NameExpired`] — the
+    ///   parent is not active.
+    /// * [`RegistryError::Unauthorized`] — `caller` does not own the parent.
+    /// * [`RegistryError::TooManyNames`] — the parent already has
+    ///   [`MAX_SUBNAMES`] subnames.
+    pub fn set_subname(
+        env: Env,
+        parent: String,
+        label: String,
+        caller: Address,
+        address: Address,
+        memo: Option<String>,
+    ) -> Result<(), RegistryError> {
+        caller.require_auth();
+        Self::check_label(&label, 1)?;
+        Self::validate_memo(memo.as_ref())?;
+        Self::require_active(&env, &parent)?;
+        Self::require_owner(&env, &parent, &caller)?;
+
+        let mut subs = Self::subname_map(&env, &parent);
+        if !subs.contains_key(label.clone()) && subs.len() >= MAX_SUBNAMES {
+            return Err(RegistryError::TooManyNames);
+        }
+        let record = Resolution { address, memo };
+        subs.set(label.clone(), record.clone());
+        Self::save_map(&env, &Self::subnames_key(&env, &parent), &subs);
+
+        SubnameSet {
+            parent,
+            label,
+            caller,
+            record: Some(record),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Delete the subname `label.parent`. Only the owner of the active parent may.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::NotFound`] — no such subname, or the parent is not registered.
+    /// * [`RegistryError::NameExpired`] — the parent has expired.
+    /// * [`RegistryError::Unauthorized`] — `caller` does not own the parent.
+    pub fn remove_subname(
+        env: Env,
+        parent: String,
+        label: String,
+        caller: Address,
+    ) -> Result<(), RegistryError> {
+        caller.require_auth();
+        Self::require_active(&env, &parent)?;
+        Self::require_owner(&env, &parent, &caller)?;
+        let mut subs = Self::subname_map(&env, &parent);
+        if subs.remove(label.clone()).is_none() {
+            return Err(RegistryError::NotFound);
+        }
+        Self::save_map(&env, &Self::subnames_key(&env, &parent), &subs);
+        SubnameSet {
+            parent,
+            label,
+            caller,
+            record: None,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The subnames of `parent` (label → payment record), ordered by label.
+    /// Empty when `parent` is not active.
+    #[must_use]
+    pub fn subnames(env: Env, parent: String) -> Map<String, Resolution> {
+        if matches!(Self::status(&env, &parent), Status::Active(_)) {
+            Self::subname_map(&env, &parent)
+        } else {
+            Map::new(&env)
+        }
+    }
+
+    /// Set the profile record `key` of `name` (for example `avatar`, `url`,
+    /// `github`) to `value`, or delete it when `value` is `None`. Only the
+    /// owner of the active name may.
+    ///
+    /// # Errors
+    ///
+    /// * [`RegistryError::InvalidRecord`] — `key` is not 1–32 bytes of a–z,
+    ///   0–9, `.` and `-`; `value` is empty or longer than 256 bytes; or the
+    ///   name already has [`MAX_RECORDS`] records.
+    /// * [`RegistryError::NotFound`] / [`RegistryError::NameExpired`] — the
+    ///   name is not active.
+    /// * [`RegistryError::Unauthorized`] — `caller` does not own the name.
+    pub fn set_record(
+        env: Env,
+        name: String,
+        caller: Address,
+        key: String,
+        value: Option<String>,
+    ) -> Result<(), RegistryError> {
+        caller.require_auth();
+        let key_ok = !key.is_empty()
+            && key.len() <= MAX_RECORD_KEY_BYTES
+            && Self::bytes(&key)
+                .as_slice()
+                .iter()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'.' || *b == b'-');
+        let value_ok = value
+            .as_ref()
+            .is_none_or(|v| !v.is_empty() && v.len() <= MAX_RECORD_VALUE_BYTES);
+        if !key_ok || !value_ok {
+            return Err(RegistryError::InvalidRecord);
+        }
+        Self::require_active(&env, &name)?;
+        Self::require_owner(&env, &name, &caller)?;
+
+        let mut records = Self::records(env.clone(), name.clone());
+        match value.clone() {
+            Some(v) => {
+                if !records.contains_key(key.clone()) && records.len() >= MAX_RECORDS {
+                    return Err(RegistryError::InvalidRecord);
+                }
+                records.set(key.clone(), v);
+            }
+            None => {
+                records.remove(key.clone());
+            }
+        }
+        Self::save_map(&env, &Self::records_key(&env, &name), &records);
+        RecordSet {
+            name,
+            caller,
+            key,
+            value,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The profile records of `name`, ordered by key. Empty when `name` is not
+    /// active or has none.
+    #[must_use]
+    pub fn records(env: Env, name: String) -> Map<String, String> {
+        if !matches!(Self::status(&env, &name), Status::Active(_)) {
+            return Map::new(&env);
+        }
+        Self::load_map(&env, &Self::records_key(&env, &name))
+    }
+
     /// Replace the contract code with an already-uploaded WASM, keeping the
     /// contract ID and all stored names. Admin-only.
     pub fn upgrade(env: Env, wasm_hash: BytesN<32>) {
@@ -793,6 +1059,65 @@ impl SideraRegistry {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /// `name`'s subnames for its current registration (empty if none).
+    fn subname_map(env: &Env, name: &String) -> Map<String, Resolution> {
+        Self::load_map(env, &Self::subnames_key(env, name))
+    }
+
+    fn subnames_key(env: &Env, name: &String) -> DataKey {
+        DataKey::Subnames(name.clone(), Self::epoch(env, name))
+    }
+
+    fn records_key(env: &Env, name: &String) -> DataKey {
+        DataKey::Records(name.clone(), Self::epoch(env, name))
+    }
+
+    fn load_map<V>(env: &Env, key: &DataKey) -> Map<String, V>
+    where
+        V: IntoVal<Env, Val> + TryFromVal<Env, Val>,
+    {
+        env.storage()
+            .persistent()
+            .get(key)
+            .unwrap_or_else(|| Map::new(env))
+    }
+
+    /// Store a map for a name's current registration, for as long as allowed.
+    fn save_map<V>(env: &Env, key: &DataKey, items: &Map<String, V>)
+    where
+        V: IntoVal<Env, Val> + TryFromVal<Env, Val>,
+    {
+        let storage = env.storage().persistent();
+        storage.set(key, items);
+        storage.extend_ttl(key, TTL_THRESHOLD_LEDGERS, env.storage().max_ttl());
+    }
+
+    /// The stamp of `name`'s current registration: how many times it has been
+    /// registered (0 for names registered before subnames existed).
+    fn epoch(env: &Env, name: &String) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Epoch(name.clone()))
+            .unwrap_or(0)
+    }
+
+    /// A string's bytes. Anything longer than 65 bytes (more than any valid
+    /// name or subname) comes back as a lone `.`, which never validates.
+    fn bytes(s: &String) -> alloc_free::Buf {
+        alloc_free::Buf::from(s)
+    }
+
+    /// Split `label.parent` at the first dot. `None` if there is no dot.
+    fn split(env: &Env, name: &String) -> Option<(String, String)> {
+        let buf = Self::bytes(name);
+        let b = buf.as_slice();
+        let dot = b.iter().position(|c| *c == b'.')?;
+        Some((
+            String::from_bytes(env, &b[..dot]),
+            String::from_bytes(env, &b[dot + 1..]),
+        ))
+    }
 
     /// Where `name` is in its life cycle, from its stored expiry.
     fn status(env: &Env, name: &String) -> Status {
@@ -959,26 +1284,28 @@ impl SideraRegistry {
     /// After a paid write (register/renew): keep the name's entries alive as
     /// long as the network allows, since the owner paid for years.
     fn bump_name(env: &Env, name: &String) {
-        let max = env.storage().max_ttl();
-        let storage = env.storage().persistent();
-        for key in [
-            DataKey::Name(name.clone()),
-            DataKey::Owner(name.clone()),
-            DataKey::Expiry(name.clone()),
-        ] {
-            storage.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, max);
-        }
+        Self::extend_name(env, name, env.storage().max_ttl());
     }
 
     /// On reads and owner updates: the usual 30-day bump for all three entries.
     fn touch_name(env: &Env, name: &String) {
+        Self::extend_name(env, name, TTL_EXTEND_TO_LEDGERS);
+    }
+
+    /// Extend every entry of `name` that exists to `to` ledgers.
+    fn extend_name(env: &Env, name: &String, to: u32) {
         let storage = env.storage().persistent();
         for key in [
             DataKey::Name(name.clone()),
             DataKey::Owner(name.clone()),
             DataKey::Expiry(name.clone()),
+            DataKey::Epoch(name.clone()),
+            Self::subnames_key(env, name),
+            Self::records_key(env, name),
         ] {
-            storage.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_TO_LEDGERS);
+            if storage.has(&key) {
+                storage.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, to);
+            }
         }
     }
 
@@ -992,8 +1319,13 @@ impl SideraRegistry {
     /// Validate a bare name (no `.sid` suffix): 3–32 chars of a–z, 0–9, or
     /// hyphen; hyphens may not lead or trail.
     fn validate_name(name: &String) -> Result<(), RegistryError> {
+        Self::check_label(name, NAME_MIN_LEN)
+    }
+
+    /// `min`–32 chars of a–z, 0–9, or hyphen; hyphens may not lead or trail.
+    fn check_label(name: &String, min: u32) -> Result<(), RegistryError> {
         let len = name.len();
-        if !(NAME_MIN_LEN..=NAME_MAX_LEN).contains(&len) {
+        if !(min..=NAME_MAX_LEN).contains(&len) {
             return Err(RegistryError::InvalidName);
         }
         for (i, b) in name.to_bytes().iter().enumerate() {
@@ -1022,3 +1354,6 @@ mod index_tests;
 
 #[cfg(test)]
 mod props;
+
+#[cfg(test)]
+mod subname_tests;

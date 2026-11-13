@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, Wallet, AlertCircle, Inbox, Pencil, Check } from "lucide-react";
+import { Loader2, Plus, Wallet, AlertCircle, Inbox, Pencil, Check, ChevronDown } from "lucide-react";
 import Navbar, { type NetworkChoice } from "@/components/Navbar";
 import DomainCard from "@/components/DomainCard";
+import NameManager from "@/components/NameManager";
 import {
   DEMO_MODE,
   namesOwnedBy,
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [primaryInput, setPrimaryInput] = useState("");
   const [savingPrimary, setSavingPrimary] = useState(false);
   const [renewing, setRenewing] = useState<string | null>(null);
+  const [managing, setManaging] = useState<string | null>(null);
 
   // Demo mode: show the demo owner's names without requiring a wallet.
   const owner = wallet.connected ? wallet.address : DEMO_MODE ? DEMO_OWNER : null;
@@ -188,14 +190,34 @@ export default function DashboardPage() {
 
         {records != null && records.length > 0 && (
           <div className="space-y-4">
-            {records.map((r) => (
-              <DomainCard
-                key={r.fullName}
-                record={r}
-                onRenew={wallet.connected || DEMO_MODE ? () => void renew(r.name) : undefined}
-                renewing={renewing === r.name}
-              />
-            ))}
+            {records.map((r) => {
+              const active = r.expiresAt == null || r.expiresAt.getTime() > Date.now();
+              const canManage = owner != null && active && (wallet.connected || DEMO_MODE);
+              return (
+                <div key={r.fullName}>
+                  <DomainCard
+                    record={r}
+                    onRenew={wallet.connected || DEMO_MODE ? () => void renew(r.name) : undefined}
+                    renewing={renewing === r.name}
+                  />
+                  {canManage && (
+                    <button
+                      type="button"
+                      aria-expanded={managing === r.name}
+                      onClick={() => setManaging((m) => (m === r.name ? null : r.name))}
+                      className="mt-2 flex items-center gap-1.5 text-sm text-star-400 hover:text-star-300"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${managing === r.name ? "rotate-180" : ""}`}
+                        aria-hidden
+                      />
+                      Subnames and profile
+                    </button>
+                  )}
+                  {canManage && managing === r.name && <NameManager name={r.name} owner={owner} />}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>

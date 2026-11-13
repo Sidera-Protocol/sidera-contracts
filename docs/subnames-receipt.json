@@ -1,0 +1,84 @@
+{
+  "network": "testnet",
+  "contractId": "CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT",
+  "sdk": "@sidera-protocol/sdk (packages/sdk)",
+  "steps": [
+    {
+      "what": "exchange registers its name",
+      "name": "demo-exchange.sid",
+      "hash": "9a6978ae23675954b9c871b1fd508dd91244845cff5963ded2a3e39e448610d3"
+    },
+    {
+      "what": "exchange creates one deposit subname per customer",
+      "hashes": [
+        "115b6b6f7d5c204abefc0f86ead285196664cda41d59bfcc03332dcab6e01e13",
+        "f255ceb2dfa3d1b711429fa044793fadee01c14f23f3fcdabab05a0c3c2bd1a8"
+      ]
+    },
+    {
+      "what": "exchange publishes its profile",
+      "hashes": [
+        "1f25dde1ed2df27e65abedf0b73ad8db289321281260dbc6d289e3d1a92dfc76",
+        "b6f9c53155fc1cf6884464fe1eaf1bdcb170ee84c28b7205f8d49f4c6396dade"
+      ],
+      "records": {
+        "description": "Sidera demo exchange (testnet)",
+        "url": "https://exchange.example"
+      }
+    },
+    {
+      "what": "anyone can list the subnames",
+      "subnames": [
+        {
+          "name": "alice.demo-exchange.sid",
+          "memo": {
+            "type": "id",
+            "value": "1001"
+          }
+        },
+        {
+          "name": "bob.demo-exchange.sid",
+          "memo": {
+            "type": "id",
+            "value": "1002"
+          }
+        }
+      ]
+    },
+    {
+      "what": "someone who does not own the parent cannot add a subname",
+      "refusedWith": "Unauthorized",
+      "ok": true
+    },
+    {
+      "what": "Bob pays 5 XLM to a subname; its memo is attached for him",
+      "name": "alice.demo-exchange.sid",
+      "hash": "e6bc72e1abea8841692666bd1d861dd04a1a88874e3e1515658be3e832869133",
+      "onChain": {
+        "destination": "GAX5F6KRYEIEPDZ3CIYFTIU5WQEI7D3TLIIWPPTVEL2ME3SAVE2RPL24",
+        "amount": "5.0000000",
+        "memoType": "id",
+        "memo": "1001"
+      },
+      "ok": true
+    },
+    {
+      "what": "a deleted subname stops resolving",
+      "hash": "33aa7fb1eeb95bfa482994af8d2f7a2aebe7977244c2eb322876fadae193b05c",
+      "ok": true
+    },
+    {
+      "what": "a name registered before the upgrade takes subnames",
+      "name": "pay.alice-pay.sid",
+      "hash": "a39cae8f15a8cb1c9d1e50f54cb4043a9b858860741ec3953b2e1d748c27e1d7",
+      "resolved": {
+        "address": "GCSR2ZE22L2J7GG7AGJTMDXVG2TJIYBHGMTS2ARTGWBNH76NERHC6MMO",
+        "memo": {
+          "type": "id",
+          "value": "77"
+        }
+      },
+      "ok": true
+    }
+  ]
+}

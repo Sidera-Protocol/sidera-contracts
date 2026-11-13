@@ -99,6 +99,14 @@ that the payment arrived with the right memo
 ([receipt](pay-by-name-receipt.json)); the dashboard's Send page does the
 same with Freighter.
 
+## Subnames
+
+`pay.alice.sid` is resolved exactly like `alice.sid`: pass it to `resolve`
+(the SDK strips `.sid`). The rules above apply unchanged; in particular,
+attach the subname's own memo, not the parent's. An exchange can give every
+customer a name such as `alice.exchange.sid` whose memo is that customer's
+deposit number.
+
 ## Watching for changes
 
 The registry emits one event per state change, with the name as the second
@@ -108,11 +116,16 @@ topic, so indexers can subscribe once and filter by name or by event:
 |---|---|---|---|
 | `registered` | `("registered", name)` | `(owner, address, memo)` | A new name exists |
 | `address_set` | `("address_set", name)` | `(caller, address, memo)` | Payment record updated |
+| `subname_set` | `("subname_set", parent)` | `(label, caller, record)` | Subname `label.parent` set, or deleted (`record` is `None`) |
+| `record_set` | `("record_set", name)` | `(caller, key, value)` | Profile record set, or deleted (`value` is `None`) |
 | `transferred` | `("transferred", name)` | `(caller, new_owner)` | Ownership moved |
 | `primary_name_set` | `("primary_name_set", address)` | `(name)` | Preferred reverse name changed |
 
 A wallet that caches resolutions should re-resolve when it observes
-`address_set` or `transferred` for a name it holds.
+`address_set` or `transferred` for a name it holds, and `subname_set` for
+the parent of a subname it holds. A name's subnames and profile also end
+when it is registered again by someone else (a `registered` event for a name
+you had cached).
 
 ## Cache invalidation for cached resolution results
 
@@ -135,7 +148,7 @@ should use those methods rather than duplicating contract invocation logic.
 
 ## What Sidera does not do yet
 
-Subnames and an indexer are future tranches — see
+An indexer is a future tranche — see
 [KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md) and the roadmap in the
 [README](../README.md#status). Paid registration, renewal and expiry, and
 verified reverse resolution, are implemented across the registry, SDK and
