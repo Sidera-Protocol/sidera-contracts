@@ -29,8 +29,8 @@ resolution.
 | Part | What works today |
 |---|---|
 | Registry contract (`contracts/registry`) | Yearly registration paid in a SEP-41 token (price by name length), `renew` (anyone may pay), expiry with a 30-day grace period, `resolve` with memo hints, `set_address`, `transfer`, verified primary names (`set_primary_name` / `primary_name`), each owner's name list (`names_of`), admin-set prices and treasury, and admin `upgrade` that keeps the contract ID and every name. Deployed on testnet. |
-| TypeScript SDK (`packages/sdk`) | Every contract call, including `register` (with years), `renew`, `namesOf`, `expiresAt`, `price`, `isAvailable` and `config`. Writes are simulated, signed, submitted and confirmed; proven end to end on testnet. |
-| Dashboard (`apps/dashboard`) | Search and resolve names, see when they expire, register with Freighter for 1–10 years at the live on-chain price, see every name you own (read from the registry, on any device), renew, and set a primary name. |
+| TypeScript SDK (`packages/sdk`) | `buildPayment` turns a resolved name into a payment with the memo attached. Every contract call, including `register` (with years), `renew`, `namesOf`, `expiresAt`, `price`, `isAvailable` and `config`. Writes are simulated, signed, submitted and confirmed; proven end to end on testnet. |
+| Dashboard (`apps/dashboard`) | Pay a name (Send page: shows the address and memo, attaches the memo, refuses unknown or expired names). Search and resolve names, see when they expire, register with Freighter for 1–10 years at the live on-chain price, see every name you own (read from the registry, on any device), renew, and set a primary name. |
 
 Not built yet (see [known limitations](docs/KNOWN-LIMITATIONS.md)): subnames,
 profile records, a mainnet deployment and an independent audit.
@@ -71,9 +71,10 @@ dashboard screen land in the same pull request.
 | Network | Stellar **Testnet** |
 | Deployed | 2026-11-12 (pricing, renewals, expiry, owner name lists, admin upgrades) |
 | Contract ID | `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT` |
-| WASM sha256 | `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6` (34,483 bytes, `stellar contract optimize` of revision `3e83b3f`) |
+| WASM sha256 | `a80a047aa9e7e1e1fc2c995faeccd2e6c87593a3160a3b5524f335e57ca07480` (35,006 bytes, `stellar contract optimize`; upgraded in place on 2026-11-13 to refuse memos that cannot be sent) |
 | Payment | Native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ character names (testnet demo prices) |
 | Live round-trip | Through the SDK: register for 2 years (treasury received 4 XLM) → resolve with memo → renewal paid by another account (+2 XLM, owner unchanged) → primary name → an impostor's primary-name claim refused → duplicate registration refused → the owner's names listed from the registry. Then: a non-admin upgrade refused, an admin upgrade applied, and every name, list and primary name unchanged afterwards. |
+| Pay by name | An exchange registered `exchange-user` with deposit memo `48151623`; Bob paid 10 XLM by name and Horizon shows the payment arrived with that memo. A 29-byte memo was refused. [Receipt](docs/pay-by-name-receipt.json). |
 
 Every transaction is linked in the [smoke receipt](docs/testnet-smoke-receipt.json).
 Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>

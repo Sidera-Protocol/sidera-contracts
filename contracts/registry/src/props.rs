@@ -13,8 +13,8 @@
 //! with `exists`; rejected names never resolve. A duplicate registration
 //! is always `NameTaken` and never overwrites the original record.
 //!
-//! **P2 — Memo integrity.** For random memos (including unicode, empty,
-//! and stress strings), whatever memo was set via `register` or
+//! **P2 — Memo integrity.** For random memos that fit a Stellar text memo
+//! (1–28 bytes, including unicode), whatever memo was set via `register` or
 //! `set_address` is *exactly* what `resolve` returns, and updates to one
 //! name never bleed into another's record.
 //!
@@ -35,6 +35,11 @@
 //! `transfer` and time jumps across several owners, `names_of(owner)` always
 //! lists exactly the names a mirror model says the owner holds (active or in
 //! grace), with the contract's own expiry, and never a released name.
+//!
+//! **P6 — No unsendable memo is ever stored.** For random memos of any
+//! length and content, `register` and `set_address` accept exactly the memos
+//! of 1–28 bytes; anything else is refused with `InvalidMemo` and leaves the
+//! registry unchanged.
 //!
 //! Runs are deterministic (fixed default seed); a failure prints its case
 //! for replay. Override the case count with
@@ -129,6 +134,18 @@ fn arbitrary_memo() -> impl Strategy<Value = std::string::String> {
     ]
 }
 
+/// Memos a Stellar text memo can carry (1–28 bytes): printable ASCII,
+/// lowercase runs, and arbitrary unicode (at most 7 chars of up to 4 bytes).
+fn valid_memo() -> impl Strategy<Value = std::string::String> {
+    prop_oneof![
+        3 => "[ -~]{1,28}",
+        2 => prop::collection::vec(prop::char::range('a', 'z'), 1..=28)
+            .prop_map(|chars| chars.into_iter().collect()),
+        2 => prop::collection::vec(any::<char>(), 1..=7)
+            .prop_map(|chars| chars.into_iter().collect()),
+    ]
+}
+
 /// One registry mutation for the ownership state machine.
 #[derive(Clone, Debug)]
 enum Op {
@@ -147,10 +164,10 @@ enum Op {
 
 fn registry_op() -> impl Strategy<Value = Op> {
     prop_oneof![
-        3 => (valid_name(), proptest::option::of(arbitrary_memo()))
+        3 => (valid_name(), proptest::option::of(valid_memo()))
             .prop_map(|(name, memo)| Op::Register { name, memo }),
         1 => (0u8..=7).prop_map(|idx| Op::Transfer { idx }),
-        2 => (0u8..=7, proptest::option::of(arbitrary_memo()))
+        2 => (0u8..=7, proptest::option::of(valid_memo()))
             .prop_map(|(idx, memo)| Op::SetAddress { idx, memo }),
     ]
 }
@@ -216,8 +233,8 @@ proptest! {
     #[test]
     fn p1_duplicate_registration_never_overwrites(
         raw in valid_name(),
-        memo_a in arbitrary_memo(),
-        memo_b in arbitrary_memo(),
+        memo_a in valid_memo(),
+        memo_b in valid_memo(),
     ) {
         prop_assume!(memo_a != memo_b);
         let w = setup_world();
@@ -252,13 +269,13 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn p2_memo_set_via_register_roundtrips_exactly(raw in valid_name(), memo in arbitrary_memo()) {
+    fn p2_memo_set_via_register_roundtrips_exactly(raw in valid_name(), memo in valid_memo()) {
         let w = setup_world();
         let owner = Address::generate(&w.env);
         let dest = Address::generate(&w.env);
         let name = w.name(&raw);
 
-        let memo_opt = if memo.is_empty() { None } else { Some(w.name(&memo)) };
+        let memo_opt = Some(w.name(&memo));
         w.client().register(&name, &owner, &dest, &memo_opt, &1);
 
         let resolution = w.client().resolve(&name);
@@ -271,8 +288,8 @@ proptest! {
     fn p2_memo_updates_are_exact_and_isolated(
         raw_a in valid_name(),
         raw_b in valid_name(),
-        memo1 in arbitrary_memo(),
-        memo2 in arbitrary_memo(),
+        memo1 in valid_memo(),
+        memo2 in valid_memo(),
     ) {
         prop_assume!(raw_a != raw_b);
         prop_assume!(memo1 != memo2);
@@ -302,7 +319,7 @@ proptest! {
     #[test]
     fn p2_memo_survives_repeated_reads(
         raw in valid_name(),
-        memo in arbitrary_memo(),
+        memo in valid_memo(),
         reads in 0u32..=8u32,
     ) {
         let w = setup_world();
@@ -575,6 +592,37 @@ proptest! {
                 listed.sort();
                 prop_assert_eq!(listed, expected, "names_of must match the model for every owner");
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P6 — no unsendable memo is ever stored
+// ---------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn p6_only_memos_a_wallet_can_send_are_stored(raw in valid_name(), memo in arbitrary_memo(), update in arbitrary_memo()) {
+        let w = setup_world();
+        let owner = Address::generate(&w.env);
+        let name = w.name(&raw);
+        let fits = |m: &std::string::String| (1..=28).contains(&m.len());
+
+        let result = w.client().try_register(&name, &owner, &owner, &Some(w.name(&memo)), &1);
+        prop_assert_eq!(result.is_ok(), fits(&memo), "register accepts exactly the memos that fit");
+        if !fits(&memo) {
+            prop_assert_eq!(result.unwrap_err().unwrap(), RegistryError::InvalidMemo);
+            prop_assert!(!w.client().exists(&name), "a refused registration stores nothing");
+            return Ok(());
+        }
+
+        let before = w.client().resolve(&name);
+        let result = w.client().try_set_address(&name, &owner, &owner, &Some(w.name(&update)));
+        prop_assert_eq!(result.is_ok(), fits(&update), "set_address accepts exactly the memos that fit");
+        if !fits(&update) {
+            prop_assert_eq!(w.client().resolve(&name), before, "a refused update changes nothing");
         }
     }
 }

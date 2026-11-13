@@ -265,3 +265,52 @@ export async function setPrimaryName(address: string, name: string): Promise<voi
 }
 
 const PRIMARY_NAME_KEY = "sidera:primary-name";
+
+/** What the user reviewed before paying: where the money goes, and with which memo. */
+export interface PaymentReview {
+  name: string;
+  address: string;
+  memo: ParsedMemo | null;
+}
+
+/**
+ * Pay `amount` XLM to `name`. The name is resolved again right before sending
+ * and must still match what the user reviewed, so a name repointed in the
+ * meantime never receives money the user did not confirm. The memo hint is
+ * attached by the SDK's `buildPayment`. Returns the transaction hash.
+ */
+export async function payName(from: string, review: PaymentReview, amount: string): Promise<string> {
+  if (!/^\d+(\.\d{1,7})?$/.test(amount) || Number(amount) <= 0) {
+    throw new Error("Enter an amount greater than 0, with at most 7 decimals");
+  }
+  if (DEMO_MODE) {
+    await new Promise((r) => setTimeout(r, 900));
+    return "demo-transaction";
+  }
+
+  const client = await readClient();
+  const fresh = await client.resolve(review.name);
+  const sameMemo = (fresh.memo?.type ?? null) === (review.memo?.type ?? null) && (fresh.memo?.value ?? null) === (review.memo?.value ?? null);
+  if (fresh.address !== review.address || !sameMemo) {
+    throw new Error(`${review.name}.sid changed since you reviewed it. Look it up again before paying.`);
+  }
+
+  const [{ signTransaction, getNetwork }, { Horizon, TransactionBuilder }, { buildPayment }] = await Promise.all([
+    import("@stellar/freighter-api"),
+    import("@stellar/stellar-sdk"),
+    import("@sidera-protocol/sdk"),
+  ]);
+  const { networkPassphrase } = await getNetwork();
+  const horizon = new Horizon.Server(
+    NETWORK === "futurenet" ? "https://horizon-futurenet.stellar.org" : "https://horizon-testnet.stellar.org",
+  );
+  const source = await horizon.loadAccount(from);
+  const tx = buildPayment({ source, to: fresh, amount, networkPassphrase });
+
+  const signed = await signTransaction(tx.toXDR(), { networkPassphrase, address: from });
+  if ("error" in signed && signed.error) {
+    throw new Error("The payment was not signed in Freighter");
+  }
+  const result = await horizon.submitTransaction(TransactionBuilder.fromXDR(signed.signedTxXdr, networkPassphrase));
+  return result.hash;
+}

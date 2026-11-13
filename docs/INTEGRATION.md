@@ -71,6 +71,34 @@ stellar contract invoke \
   -- resolve --name alice-pay
 ```
 
+## Paying a name
+
+With the SDK, `buildPayment` builds the payment from the resolution, so the
+memo is attached for you:
+
+```typescript
+import { Horizon, Networks } from "@stellar/stellar-sdk";
+import { SideraClient, buildPayment } from "@sidera-protocol/sdk";
+
+const sidera = new SideraClient({ contractId: REGISTRY_ID, network: "testnet" });
+const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
+
+const to = await sidera.resolve("exchange-user.sid"); // throws if unknown or expired
+// Show to.address and to.memo to the user and wait for confirmation, then:
+const tx = buildPayment({
+  source: await horizon.loadAccount(payer),
+  to,
+  amount: "10",
+  networkPassphrase: Networks.TESTNET,
+});
+// Sign tx with the user's wallet, then horizon.submitTransaction(signed).
+```
+
+`scripts/pay-by-name-demo.mjs` runs this on testnet and checks on Horizon
+that the payment arrived with the right memo
+([receipt](pay-by-name-receipt.json)); the dashboard's Send page does the
+same with Freighter.
+
 ## Watching for changes
 
 The registry emits one event per state change, with the name as the second

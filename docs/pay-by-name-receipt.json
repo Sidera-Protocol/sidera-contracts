@@ -1,0 +1,42 @@
+{
+  "network": "testnet",
+  "contractId": "CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT",
+  "sdk": "@sidera-protocol/sdk (packages/sdk)",
+  "steps": [
+    {
+      "what": "exchange registers a deposit name with a memo",
+      "name": "exchange-user.sid",
+      "hash": "129eebffcace570e6566207c5bfb8348e9c3b1cb93ae046a22d3c6e87ead5f97",
+      "address": "GAX5F6KRYEIEPDZ3CIYFTIU5WQEI7D3TLIIWPPTVEL2ME3SAVE2RPL24",
+      "memo": "48151623"
+    },
+    {
+      "what": "a memo longer than a Stellar text memo (28 bytes) is refused",
+      "refusedWith": "InvalidMemo",
+      "ok": true
+    },
+    {
+      "what": "Bob resolves the name",
+      "address": "GAX5F6KRYEIEPDZ3CIYFTIU5WQEI7D3TLIIWPPTVEL2ME3SAVE2RPL24",
+      "memo": {
+        "type": "id",
+        "value": "48151623"
+      }
+    },
+    {
+      "what": "Bob pays 10 XLM by name; the memo is attached for him",
+      "hash": "7e1bb3a0b1c7e2ca50140131b274c0a7785f36698f0e8d386284b8a1f73c791e",
+      "onChain": {
+        "destination": "GAX5F6KRYEIEPDZ3CIYFTIU5WQEI7D3TLIIWPPTVEL2ME3SAVE2RPL24",
+        "amount": "10.0000000",
+        "memoType": "id",
+        "memo": "48151623"
+      },
+      "exchangeBalance": {
+        "before": "9997.9916161",
+        "after": "10007.9916161"
+      },
+      "ok": true
+    }
+  ]
+}

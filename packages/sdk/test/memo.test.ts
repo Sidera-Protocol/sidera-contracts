@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { SideraError } from "../src/errors.js";
 import { parseMemoHint, toStellarMemo } from "../src/memo.js";
 
 describe("parseMemoHint", () => {
-  it("returns null for absent or blank hints", () => {
+  it("returns null only when there is no memo at all", () => {
     expect(parseMemoHint(null)).toBeNull();
     expect(parseMemoHint(undefined)).toBeNull();
     expect(parseMemoHint("")).toBeNull();
-    expect(parseMemoHint("   ")).toBeNull();
+    // A stored memo of spaces is still a memo: send it exactly.
+    expect(parseMemoHint("   ")).toEqual({ type: "text", value: "   " });
   });
 
   it("parses pure digit strings as MEMO_ID", () => {
     expect(parseMemoHint("1029384756")).toEqual({ type: "id", value: "1029384756" });
     expect(parseMemoHint("1")).toEqual({ type: "id", value: "1" });
-    expect(parseMemoHint(" 42 ")).toEqual({ type: "id", value: "42" });
   });
 
   it("parses alphanumeric strings as MEMO_TEXT", () => {
@@ -20,26 +21,27 @@ describe("parseMemoHint", () => {
     expect(parseMemoHint("alice-payment")).toEqual({ type: "text", value: "alice-payment" });
   });
 
-  it("truncates text memos past the 28-byte Stellar limit", () => {
-    const long = "a".repeat(40);
-    const parsed = parseMemoHint(long);
-    expect(parsed?.type).toBe("text");
-    expect(parsed?.value.length).toBe(28);
+  it("refuses a text memo past the 28-byte limit instead of shortening it", () => {
+    expect(() => parseMemoHint("a".repeat(29))).toThrow(/longer than 28 bytes/);
+    // 15 × 2-byte chars = 30 bytes: refused, never cut to fit.
+    expect(() => parseMemoHint("é".repeat(15))).toThrow(SideraError);
+    expect(parseMemoHint("a".repeat(28))).toEqual({ type: "text", value: "a".repeat(28) });
   });
 
-  it("keeps multi-byte text within the 28-byte limit", () => {
-    // 20 × 2-byte chars = 40 bytes → truncated to 14 chars (28 bytes).
-    const parsed = parseMemoHint("é".repeat(20));
-    expect(parsed?.type).toBe("text");
-    expect(Buffer.byteLength(parsed?.value ?? "", "utf8")).toBeLessThanOrEqual(28);
+  it("keeps leading zeros by sending the memo as text, exactly as stored", () => {
+    expect(parseMemoHint("007")).toEqual({ type: "text", value: "007" });
+    expect(parseMemoHint("0")).toEqual({ type: "id", value: "0" });
   });
 
-  it("treats leading-zero digit strings as IDs (exchange convention)", () => {
-    expect(parseMemoHint("000123")).toEqual({ type: "id", value: "000123" });
+  it("sends numbers that do not fit a u64 as text", () => {
+    expect(parseMemoHint("18446744073709551615")).toEqual({ type: "id", value: "18446744073709551615" });
+    expect(parseMemoHint("18446744073709551616")).toEqual({ type: "text", value: "18446744073709551616" });
   });
-});
 
-describe("toStellarMemo", () => {
+  it("never trims: surrounding spaces are part of a text memo", () => {
+    expect(parseMemoHint(" 42 ")).toEqual({ type: "text", value: " 42 " });
+  });
+
   it("maps absent hints to a none memo", () => {
     const memo = toStellarMemo(null);
     expect(memo.type).toBe("none");

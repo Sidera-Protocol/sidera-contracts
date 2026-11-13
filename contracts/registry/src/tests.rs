@@ -1040,3 +1040,44 @@ fn p1_arbitrary_names_never_half_register_deterministic() {
         }
     }
 }
+
+/// A memo Stellar cannot carry is refused at registration and on update, so
+/// a wallet is never handed a memo it would have to cut short.
+#[test]
+fn memos_must_fit_a_stellar_text_memo() {
+    let (env, id) = make_env();
+    env.mock_all_auths();
+    let client = SideraRegistryClient::new(&env, &id);
+    let owner = Address::generate(&env);
+
+    let fits = s(&env, "1234567890123456789012345678"); // 28 bytes
+    let too_long = s(&env, "12345678901234567890123456789"); // 29 bytes
+    let empty = s(&env, "");
+
+    for bad in [too_long.clone(), empty.clone()] {
+        assert_eq!(
+            client
+                .try_register(&s(&env, "memo-check"), &owner, &owner, &Some(bad), &1)
+                .unwrap_err()
+                .unwrap(),
+            RegistryError::InvalidMemo
+        );
+    }
+    assert!(!client.exists(&s(&env, "memo-check")));
+
+    client.register(
+        &s(&env, "memo-check"),
+        &owner,
+        &owner,
+        &Some(fits.clone()),
+        &1,
+    );
+    assert_eq!(client.resolve(&s(&env, "memo-check")).memo, Some(fits));
+    assert_eq!(
+        client
+            .try_set_address(&s(&env, "memo-check"), &owner, &owner, &Some(too_long))
+            .unwrap_err()
+            .unwrap(),
+        RegistryError::InvalidMemo
+    );
+}

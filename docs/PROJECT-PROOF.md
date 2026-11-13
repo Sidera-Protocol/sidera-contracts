@@ -2,14 +2,17 @@
 
 The evidence that Sidera's registry, SDK and dashboard work together on
 Stellar testnet: paid registration, renewal, expiry, resolution with memo
-hints, verified primary names, owner name lists and admin upgrades.
+hints, paying a name with its memo attached, verified primary names, owner
+name lists and admin upgrades.
 
 ## Live testnet proof
 
 - Network: Stellar testnet
 - Contract: `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT`
 - Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>
-- WASM SHA-256 (deployed, optimized): `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6`
+- WASM SHA-256 (deployed, optimized): `a80a047aa9e7e1e1fc2c995faeccd2e6c87593a3160a3b5524f335e57ca07480`
+  (upgraded 2026-11-13 to refuse memos that cannot be sent; before that
+  `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6`)
 - Payment token: native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ characters
 
 The [smoke receipt](testnet-smoke-receipt.json) records every step with its
@@ -34,16 +37,36 @@ contract:
 12. the admin upgraded the contract, and afterwards the name, its memo, the
     owner's list, the primary name and the name count were all unchanged.
 
+## Paying a name with a memo
+
+The [pay-by-name receipt](pay-by-name-receipt.json), from
+`scripts/pay-by-name-demo.mjs`, shows what Sidera is for: an exchange
+deposit that cannot lose its memo.
+
+1. An exchange account registered `exchange-user` pointing at its address
+   with the deposit memo `48151623`.
+2. Registering a 29-byte memo was refused (`InvalidMemo`): it would not fit
+   a Stellar memo.
+3. Bob resolved `exchange-user.sid` and paid 10 XLM with `buildPayment`. He
+   never typed the address or the memo.
+4. Read back from Horizon: the payment went to the exchange's address, for
+   10 XLM, with `MEMO_ID 48151623`, and the exchange's balance rose by 10 XLM.
+
+The dashboard's Send page was checked in a browser against the same
+contract: it shows the address and the memo it will attach, and refuses
+unknown and invalid names.
+
 ## Contract and repository verification
 
-- Contract: 72 tests, including 20 for pricing, expiry, grace period,
+- Contract: 74 tests, including 20 for pricing, expiry, grace period,
   renewal and admin rules, 8 for owner name lists and upgrades, and five
   property-based suites. P4 checks over random sequences of registrations,
   renewals and time jumps that the treasury receives exactly the quoted
   prices, no token is created or lost, failed calls move no money, and no
   expiry exceeds 10 years ahead. P5 checks that every owner's list always
-  matches who holds what; it found a self-transfer bug before release.
-- SDK: 53 tests, with fixtures that use the contract's real encodings.
+  matches who holds what; it found a self-transfer bug before release. P6
+  checks that only memos of 1–28 bytes are ever stored.
+- SDK: 60 tests, with fixtures that use the contract's real encodings.
 - Dashboard: typecheck and production build; search, expiry display and live
   price quotes checked in a browser against the testnet contract.
 - CI runs all of the above on every pull request.

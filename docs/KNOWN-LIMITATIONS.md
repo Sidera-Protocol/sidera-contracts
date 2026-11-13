@@ -31,6 +31,11 @@ not a hidden gap.
   than a 10-year registration. If a name is neither renewed, updated nor
   resolved for that long, its entries archive and must be restored (a
   standard Soroban restore) before use. The registration itself is not lost.
+- **The memo type is inferred, not stored.** A memo is stored as text, and
+  wallets send digits (no leading zero, fits a u64) as `MEMO_ID` and anything
+  else as `MEMO_TEXT`. An exchange that expects a numeric memo as
+  `MEMO_TEXT` cannot say so yet. `MEMO_HASH` and `MEMO_RETURN` are not
+  supported.
 - **No subnames.** Only second-level names under `.sid` can be registered;
   `pay.alice.sid` is not a thing yet.
 - **Unilateral transfer.** `transfer` moves ownership without the
