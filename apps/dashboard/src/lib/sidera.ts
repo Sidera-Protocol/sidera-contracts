@@ -22,15 +22,27 @@ export interface NameRecordView {
   source: "demo" | "chain";
   /** Mock-only: available names report no record yet. */
   available: boolean;
-  /** When the registration expires (null in demo mode). */
+  /** When the registration expires (null in demo mode). For a subname, its parent's expiry. */
   expiresAt: Date | null;
+  /** Profile records (`avatar`, `url`, …); empty for subnames. */
+  records?: Record<string, string>;
+}
+
+/** A subname of one of your names, as shown in the dashboard. */
+export interface SubnameView {
+  label: string;
+  fullName: string;
+  address: string;
+  memo: ParsedMemo | null;
 }
 
 export type LookupResult =
   | { status: "found"; record: NameRecordView }
   | { status: "expired"; name: string; fullName: string; owner: string; expiresAt: Date; releasedAt: Date }
   | { status: "available"; name: string; fullName: string; source: "demo" | "chain" }
-  | { status: "invalid"; name: string; reason: string };
+  | { status: "invalid"; name: string; reason: string }
+  /** A well-formed subname that its parent's owner has not created. */
+  | { status: "missing"; name: string; fullName: string; parent: string };
 
 const CONTRACT_ID = process.env.NEXT_PUBLIC_SIDERIA_CONTRACT_ID ?? "";
 const NETWORK = (process.env.NEXT_PUBLIC_SIDERIA_NETWORK as "testnet" | "futurenet") ?? "testnet";
@@ -125,8 +137,74 @@ export function checkName(raw: string): { ok: true; name: string } | { ok: false
   return { ok: true, name };
 }
 
-/** Look up a name; returns a typed union the UI renders directly. */
+const LABEL_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Demo-mode subnames and profile records (kept in memory). */
+const DEMO_SUBNAMES: Record<string, Record<string, { address: string; memo: ParsedMemo | null }>> = {
+  alice: { pay: { address: MOCK_REGISTRY.bob!.address, memo: { type: "id", value: "1029384756" } } },
+};
+const DEMO_RECORDS: Record<string, Record<string, string>> = {
+  alice: { url: "https://alice.example", "com.github": "alice" },
+};
+
+/** Look up `label.parent` (a subname). */
+async function lookupSubname(label: string, parentRaw: string): Promise<LookupResult> {
+  const parentCheck = checkName(parentRaw);
+  const name = `${label}.${parentRaw}`;
+  if (!LABEL_RE.test(label) || label.length > 32) {
+    return { status: "invalid", name, reason: "a subname label is 1–32 of a–z, 0–9 and inner hyphens" };
+  }
+  if (!parentCheck.ok) {
+    return { status: "invalid", name, reason: `the parent name needs ${parentCheck.reason}` };
+  }
+  const parent = parentCheck.name;
+  const full = `${label}.${parent}`;
+  const missing: LookupResult = { status: "missing", name: full, fullName: `${full}.sid`, parent };
+
+  if (DEMO_MODE) {
+    const sub = DEMO_SUBNAMES[parent]?.[label];
+    const owner = MOCK_REGISTRY[parent]?.owner;
+    if (sub == null || owner == null) return missing;
+    return {
+      status: "found",
+      record: { name: full, fullName: `${full}.sid`, owner, ...sub, source: "demo", available: false, expiresAt: null },
+    };
+  }
+
+  const client = await readClient();
+  try {
+    const res = await client.resolve(full);
+    const [owner, expiresAt] = await Promise.all([client.ownerOf(parent), client.expiresAt(parent)]);
+    return {
+      status: "found",
+      record: { name: full, fullName: `${full}.sid`, owner, address: res.address, memo: res.memo, source: "chain", available: false, expiresAt },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/has expired|NameExpired/i.test(message)) {
+      const [owner, expiresAt] = await Promise.all([client.ownerOf(parent), client.expiresAt(parent)]);
+      return {
+        status: "expired",
+        name: full,
+        fullName: `${full}.sid`,
+        owner,
+        expiresAt,
+        releasedAt: new Date(expiresAt.getTime() + GRACE_PERIOD_MS),
+      };
+    }
+    if (/not registered|NotFound/i.test(message)) return missing;
+    throw err;
+  }
+}
+
+/** Look up a name or subname; returns a typed union the UI renders directly. */
 export async function lookupName(raw: string): Promise<LookupResult> {
+  const trimmed = raw.trim().toLowerCase().replace(/\.sid$/, "");
+  const parts = trimmed.split(".");
+  if (parts.length === 2) return lookupSubname(parts[0]!, parts[1]!);
+  if (parts.length > 2) {
+    return { status: "invalid", name: raw, reason: "subnames are one level deep, like pay.alice" };
+  }
   const check = checkName(raw);
   if (!check.ok) {
     return { status: "invalid", name: raw, reason: check.reason };
@@ -140,7 +218,15 @@ export async function lookupName(raw: string): Promise<LookupResult> {
     }
     return {
       status: "found",
-      record: { name, fullName: `${name}.sid`, ...hit, source: "demo", available: false, expiresAt: null },
+      record: {
+        name,
+        fullName: `${name}.sid`,
+        ...hit,
+        source: "demo",
+        available: false,
+        expiresAt: null,
+        records: { ...DEMO_RECORDS[name] },
+      },
     };
   }
 
@@ -150,7 +236,11 @@ export async function lookupName(raw: string): Promise<LookupResult> {
     const res = await client.resolve(name);
     // The registry keeps ownership and expiry separate from the payment
     // record, so fetch them alongside the resolution.
-    const [ownerAddress, expiresAt] = await Promise.all([client.ownerOf(name), client.expiresAt(name)]);
+    const [ownerAddress, expiresAt, records] = await Promise.all([
+      client.ownerOf(name),
+      client.expiresAt(name),
+      client.records(name),
+    ]);
     return {
       status: "found",
       record: {
@@ -162,6 +252,7 @@ export async function lookupName(raw: string): Promise<LookupResult> {
         source: "chain",
         available: false,
         expiresAt,
+        records,
       },
     };
   } catch (err) {
@@ -313,4 +404,57 @@ export async function payName(from: string, review: PaymentReview, amount: strin
   }
   const result = await horizon.submitTransaction(TransactionBuilder.fromXDR(signed.signedTxXdr, networkPassphrase));
   return result.hash;
+}
+
+/** The subnames and profile records of `name`. */
+export async function nameExtras(name: string): Promise<{ subnames: SubnameView[]; records: Record<string, string> }> {
+  if (DEMO_MODE) {
+    const subs = Object.entries(DEMO_SUBNAMES[name] ?? {}).map(([label, r]) => ({
+      label,
+      fullName: `${label}.${name}.sid`,
+      ...r,
+    }));
+    return { subnames: subs.sort((a, b) => a.label.localeCompare(b.label)), records: { ...DEMO_RECORDS[name] } };
+  }
+  const client = await readClient();
+  const [subnames, records] = await Promise.all([client.subnames(name), client.records(name)]);
+  return { subnames, records };
+}
+
+/** Create or update `label.parent`, signed by the parent's owner in Freighter. */
+export async function saveSubname(owner: string, parent: string, label: string, address: string, memo: string): Promise<void> {
+  const cleanMemo = memo.length > 0 ? memo : undefined;
+  if (DEMO_MODE) {
+    const { parseMemoHint } = await import("@sidera-protocol/sdk");
+    await new Promise((r) => setTimeout(r, 500));
+    DEMO_SUBNAMES[parent] = { ...DEMO_SUBNAMES[parent], [label.trim().toLowerCase()]: { address, memo: parseMemoHint(cleanMemo) } };
+    return;
+  }
+  const client = await writeClient(owner);
+  await client.setSubname({ parent, label, address, memo: cleanMemo }, owner);
+}
+
+/** Delete `label.parent`, signed by the parent's owner in Freighter. */
+export async function deleteSubname(owner: string, parent: string, label: string): Promise<void> {
+  if (DEMO_MODE) {
+    await new Promise((r) => setTimeout(r, 400));
+    delete DEMO_SUBNAMES[parent]?.[label];
+    return;
+  }
+  const client = await writeClient(owner);
+  await client.removeSubname(parent, label, owner);
+}
+
+/** Set (or, with an empty value, delete) a profile record of `name`. */
+export async function saveRecord(owner: string, name: string, key: string, value: string): Promise<void> {
+  if (DEMO_MODE) {
+    await new Promise((r) => setTimeout(r, 400));
+    const current = { ...DEMO_RECORDS[name] };
+    if (value.length > 0) current[key] = value;
+    else delete current[key];
+    DEMO_RECORDS[name] = current;
+    return;
+  }
+  const client = await writeClient(owner);
+  await client.setRecord(name, key, value.length > 0 ? value : null, owner);
 }

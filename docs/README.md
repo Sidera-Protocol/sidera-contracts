@@ -62,8 +62,7 @@ README and [security policy](../SECURITY.md).
 
 ## Planned work
 
-Planned issues may cover pricing and renewals, subnames, resolver and memo
-safety, indexer support, wallet integration, dashboard workflows, testing,
+Planned issues may cover resolver and memo safety, indexer support, wallet integration, dashboard workflows, testing,
 security review, documentation, and developer tooling.
 Cross-repository changes should explain which contract, SDK, and application
 surfaces need to stay compatible.

@@ -148,9 +148,28 @@ await client.setPrimaryName(ownerAddress, "alice");
 await client.transfer({ name: "alice", from: ownerAddress, to: newOwner });
 ```
 
+## Subnames and profiles
+
+```ts
+// The owner of "alice" gives pay.alice its own address and memo (free):
+await client.setSubname({ parent: "alice", label: "pay", address: exchangeAddress, memo: "1001" }, ownerAddress);
+await client.resolve("pay.alice.sid");          // { address: exchangeAddress, memo: { type: "id", value: "1001" } }
+await client.subnames("alice");                 // [{ label: "pay", fullName: "pay.alice.sid", address, memo }]
+await client.removeSubname("alice", "pay", ownerAddress);
+
+// Public profile records (null deletes one):
+await client.setRecord("alice", "url", "https://alice.example", ownerAddress);
+await client.records("alice");                  // { url: "https://alice.example" }
+```
+
+Subnames are one level deep, live as long as their parent's registration,
+and are managed only by the parent's owner. Profile values are the owner's
+claims, not verified facts.
+
 ## Name rules
 
 - 3–32 characters, `a–z`, `0–9`, inner hyphens (no leading/trailing `-`)
+- Subname labels follow the same rules with 1–32 characters: `pay.alice`
 - Input is normalized: `Alice.SID` → `alice`
 - Validation runs client-side first (instant feedback), then on-chain
 

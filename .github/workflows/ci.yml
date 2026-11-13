@@ -88,7 +88,7 @@ jobs:
       # of shipping silently. Raise the budget deliberately, in a reviewed PR.
       - name: Enforce maximum WASM size
         run: |
-          MAX_SIZE=49152
+          MAX_SIZE=65536
           shopt -s nullglob
           found=0
           for wasm in target/wasm32v1-none/release/*.wasm; do

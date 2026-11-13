@@ -47,6 +47,18 @@ function InvalidPanel({ result }: { result: Extract<LookupResult, { status: "inv
   );
 }
 
+function MissingPanel({ result }: { result: Extract<LookupResult, { status: "missing" }> }) {
+  return (
+    <div className="rounded-2xl border border-space-700 bg-space-900 p-6 text-center">
+      <p className="font-mono text-2xl font-semibold text-white">{result.fullName}</p>
+      <p className="mt-1 text-sm text-gray-400">
+        does not exist. Only the owner of <span className="font-mono text-gray-200">{result.parent}.sid</span> can
+        create it.
+      </p>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [network, setNetwork] = useState<NetworkChoice>("testnet");
   const [query, setQuery] = useState("");
@@ -100,6 +112,7 @@ export default function HomePage() {
             />
           )}
           {result?.status === "invalid" && <InvalidPanel result={result} />}
+          {result?.status === "missing" && <MissingPanel result={result} />}
           {result?.status === "expired" && <ExpiredPanel result={result} />}
         </section>
 

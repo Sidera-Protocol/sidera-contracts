@@ -1,4 +1,4 @@
-import { CheckCircle2, Copy, Hash, Tag } from "lucide-react";
+import { CheckCircle2, Copy, Hash, Tag, UserRound } from "lucide-react";
 import type { NameRecordView } from "@/lib/sidera";
 
 function MemoTag({ type }: { type: "id" | "text" }) {
@@ -32,6 +32,27 @@ function Field({ label, value }: { label: string; value: string }) {
       </dd>
     </div>
   );
+}
+
+/** Friendly labels for the common profile keys; others show as they are. */
+export const PROFILE_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
+  { key: "description", label: "About", placeholder: "Payments for Alice's shop" },
+  { key: "url", label: "Website", placeholder: "https://example.com" },
+  { key: "avatar", label: "Avatar URL", placeholder: "https://example.com/me.png" },
+  { key: "com.github", label: "GitHub", placeholder: "username" },
+  { key: "com.x", label: "X", placeholder: "username" },
+];
+
+/** A profile value, linked only when it is a plain https URL. */
+function ProfileValue({ value }: { value: string }) {
+  if (/^https:\/\/[^\s]+$/.test(value)) {
+    return (
+      <a href={value} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-star-400 hover:underline">
+        {value}
+      </a>
+    );
+  }
+  return <span className="break-all text-gray-200">{value}</span>;
 }
 
 /** Viewer for a registered name record. `onRenew` adds a renew button. */
@@ -103,6 +124,24 @@ export default function DomainCard({
           <span className="text-sm text-gray-500">none — direct wallet payment</span>
         )}
       </div>
+
+      {record.records && Object.keys(record.records).length > 0 && (
+        <section className="mt-5 border-t border-space-800 pt-4" aria-label="Profile">
+          <h3 className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wide text-gray-500">
+            <UserRound className="h-3.5 w-3.5" aria-hidden /> Profile
+          </h3>
+          <dl className="grid gap-2 text-sm sm:grid-cols-[8rem_1fr]">
+            {Object.entries(record.records).map(([key, value]) => (
+              <div key={key} className="contents">
+                <dt className="text-gray-500">{PROFILE_FIELDS.find((f) => f.key === key)?.label ?? key}</dt>
+                <dd>
+                  <ProfileValue value={value} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {record.source === "demo" && (
         <p className="mt-4 text-xs text-amber-400/80">

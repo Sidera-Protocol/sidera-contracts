@@ -2,16 +2,17 @@
 
 The evidence that Sidera's registry, SDK and dashboard work together on
 Stellar testnet: paid registration, renewal, expiry, resolution with memo
-hints, paying a name with its memo attached, verified primary names, owner
-name lists and admin upgrades.
+hints, paying a name with its memo attached, subnames and profile records,
+verified primary names, owner name lists and admin upgrades.
 
 ## Live testnet proof
 
 - Network: Stellar testnet
 - Contract: `CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT`
 - Explorer: <https://lab.stellar.org/r/testnet/contract/CD4YE4ERU37U5KQU3QCJJGIKUSES6QXA6WNLIMORRBY62RD37SC6FGUT>
-- WASM SHA-256 (deployed, optimized): `a80a047aa9e7e1e1fc2c995faeccd2e6c87593a3160a3b5524f335e57ca07480`
-  (upgraded 2026-11-13 to refuse memos that cannot be sent; before that
+- WASM SHA-256 (deployed, optimized): `42f55fba36cbcb871c90981e83e27c505965f06f9ad32a6b275f112ff00f524a`
+  (upgraded 2026-11-13 for subnames and profile records; earlier the same
+  day `a80a047aa9e7…` to refuse memos that cannot be sent; before that
   `f073550659c2aa14e226965422bf53716b98991eaeea5ee280edb9f5b0fb47a6`)
 - Payment token: native XLM; 50 / 10 / 2 XLM per year for 3 / 4 / 5+ characters
 
@@ -56,17 +57,41 @@ The dashboard's Send page was checked in a browser against the same
 contract: it shows the address and the memo it will attach, and refuses
 unknown and invalid names.
 
+## Subnames and profiles
+
+The [subnames receipt](subnames-receipt.json), from
+`scripts/subnames-demo.mjs`:
+
+1. An exchange registered `demo-exchange` and created
+   `alice.demo-exchange` (memo `1001`) and `bob.demo-exchange` (memo `1002`),
+   one deposit name per customer, and published a website and description.
+2. Anyone could list the subnames and read the profile.
+3. An account that does not own `demo-exchange` tried to add a subname and
+   was refused (`Unauthorized`).
+4. Bob paid 5 XLM to `alice.demo-exchange.sid`; Horizon shows it reached the
+   exchange with `MEMO_ID 1001`, Alice's customer number.
+5. A deleted subname stopped resolving.
+6. `alice-pay`, registered before this upgrade, took the subname
+   `pay.alice-pay` like any new name.
+
+The dashboard was checked in a browser: subname search and the Send page
+against the testnet contract, and adding and removing subnames and editing
+the profile in demo mode.
+
 ## Contract and repository verification
 
-- Contract: 74 tests, including 20 for pricing, expiry, grace period,
+- Contract: 87 tests, including 20 for pricing, expiry, grace period,
   renewal and admin rules, 8 for owner name lists and upgrades, and five
   property-based suites. P4 checks over random sequences of registrations,
   renewals and time jumps that the treasury receives exactly the quoted
   prices, no token is created or lost, failed calls move no money, and no
   expiry exceeds 10 years ahead. P5 checks that every owner's list always
   matches who holds what; it found a self-transfer bug before release. P6
-  checks that only memos of 1–28 bytes are ever stored.
-- SDK: 60 tests, with fixtures that use the contract's real encodings.
+  checks that only memos of 1–28 bytes are ever stored. 13 tests cover
+  subnames and profiles, including that a new registrant never inherits the
+  previous owner's subnames or records, and that names registered before the
+  upgrade work with both.
+- SDK: 72 tests, with fixtures that use the contract's real encodings.
 - Dashboard: typecheck and production build; search, expiry display and live
   price quotes checked in a browser against the testnet contract.
 - CI runs all of the above on every pull request.

@@ -36,8 +36,13 @@ not a hidden gap.
   else as `MEMO_TEXT`. An exchange that expects a numeric memo as
   `MEMO_TEXT` cannot say so yet. `MEMO_HASH` and `MEMO_RETURN` are not
   supported.
-- **No subnames.** Only second-level names under `.sid` can be registered;
-  `pay.alice.sid` is not a thing yet.
+- **Subnames are one level deep and belong to the parent's owner.**
+  `pay.alice` works; `a.pay.alice` does not. A subname has no owner of its
+  own: whoever owns `alice` can change or delete `pay.alice` at any time, and
+  a new owner of `alice` (after a transfer) takes them over.
+- **Profile records are not verified.** `com.github: alice` is what the name's
+  owner typed, not proof they control that account. Apps should show the
+  values as claims and never load an `avatar` URL without care.
 - **Unilateral transfer.** `transfer` moves ownership without the
   recipient's acceptance, matching DNS/ENS convention. There is no
   escrowed or two-phase transfer.

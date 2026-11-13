@@ -124,6 +124,30 @@ export interface RegistryConfig {
   };
 }
 
+/** A subname of a name, from `subnames`. */
+export interface SubnameRecord {
+  /** The label, e.g. `pay` for `pay.alice`. */
+  label: string;
+  /** Full name with suffix, e.g. `pay.alice.sid`. */
+  fullName: string;
+  /** Where payments to the subname go. */
+  address: string;
+  /** Parsed memo hint, ready to attach to a payment. */
+  memo: ParsedMemo | null;
+}
+
+/** Parameters for creating or updating a subname. */
+export interface SubnameParams {
+  /** The parent name the caller owns, e.g. `alice`. */
+  parent: string;
+  /** The label, e.g. `pay` (1–32 of a–z, 0–9, inner hyphens). */
+  label: string;
+  /** Where payments to the subname go. */
+  address: string;
+  /** Optional memo the destination requires (1–28 bytes). */
+  memo?: string;
+}
+
 /** Parameters for transferring a name. */
 export interface TransferParams {
   /** Bare name to transfer. */
